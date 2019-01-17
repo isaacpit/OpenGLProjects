@@ -1,1 +1,1 @@
-# SoftwareRasterizer
+# OpenGL Projects
