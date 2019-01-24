@@ -14,6 +14,10 @@
 
 using namespace std;
 
+struct ZBuffer {
+	vector<vector<int>> z;
+}
+
 struct Transformation {
 	int tx;
 	int ty;
@@ -212,6 +216,10 @@ struct BoundedBox {
 		unsigned char r = 0;
 		unsigned char g = 0;
 		unsigned char b = 0;
+
+		// used when color mode = 2
+		Vertex top;
+		Vertex bot;
 		if (mode == 0) {
 			// shapeR = rand() % 256;
 			// shapeG = rand() % 256;
@@ -235,6 +243,30 @@ struct BoundedBox {
 			vertices.at(1).color = {shapeR1, shapeG1, shapeB1};
 			vertices.at(2).color = {shapeR2, shapeG2, shapeB2};
 			
+		}
+		else if (mode == 1) {
+			r = 255;
+			g = 0;
+			b = 0;
+		}
+		else if (mode == 2) {
+
+			unsigned char shapeRTop = 255;
+			unsigned char shapeGTop = 0;
+			unsigned char shapeBTop = 0;
+			top.x=0;
+			top.y=max_y;
+			top.z=0;
+			top.color = {shapeRTop, shapeGTop, shapeBTop };
+
+
+			unsigned char shapeRBot = 0;
+			unsigned char shapeGBot = 0;
+			unsigned char shapeBBot = 255;
+			bot.x=0;
+			bot.y=min_y;
+			bot.z=0;
+			top.color = { shapeRBot, shapeGBot, shapeBBot};
 		}
 		cout << "shapeR: " << int(shapeR) << endl;
 		cout << "shapeG: " << int(shapeG) << endl;
@@ -265,6 +297,13 @@ struct BoundedBox {
 				int chunk = i / 10;
 				// cout << "chunk is : " << chunk << endl;
 				vector<float> v_baryCoords = barycentricCompute(i, j);
+				// if (mode == 0) {
+				// 	v_baryCoords = barycentricCompute(i, j);
+				// }
+				// else if (mode == 2) {
+				// 	v_baryCoords = barycentricCompute(i, j);
+				// }
+
 				// float sum = v_baryCoords.at(0) + v_baryCoords.at(1) + v_baryCoords.at(2);
 				// cout << "sum: " << sum << endl;
 				bool insideAlpha = v_baryCoords.at(0) >= 0 && v_baryCoords.at(0) <= 1;
@@ -281,15 +320,25 @@ struct BoundedBox {
 					// r = shapeR;
 					// g = shapeG;
 					// b = shapeB;
-					r = (v_baryCoords.at(0) * vertices.at(0).color.at(0) + 
-						v_baryCoords.at(1) * vertices.at(1).color.at(0) + 
-						v_baryCoords.at(2) * vertices.at(2).color.at(0) ) / (v_baryCoords.at(0) + v_baryCoords.at(1) + v_baryCoords.at(2)) ;
-					g = (v_baryCoords.at(0) * vertices.at(0).color.at(1) + 
-						v_baryCoords.at(1) * vertices.at(1).color.at(1) + 
-						v_baryCoords.at(2) * vertices.at(2).color.at(1) ) / (v_baryCoords.at(0) + v_baryCoords.at(1) + v_baryCoords.at(2)) ;
-					b = (v_baryCoords.at(0) * vertices.at(0).color.at(2) + 
-						v_baryCoords.at(1) * vertices.at(1).color.at(2) + 
-						v_baryCoords.at(2) * vertices.at(2).color.at(2) ) / (v_baryCoords.at(0) + v_baryCoords.at(1) + v_baryCoords.at(2)) ;
+
+					if (mode == 0) {
+						r = (v_baryCoords.at(0) * vertices.at(0).color.at(0) + 
+							v_baryCoords.at(1) * vertices.at(1).color.at(0) + 
+							v_baryCoords.at(2) * vertices.at(2).color.at(0) ) / (v_baryCoords.at(0) + v_baryCoords.at(1) + v_baryCoords.at(2)) ;
+						g = (v_baryCoords.at(0) * vertices.at(0).color.at(1) + 
+							v_baryCoords.at(1) * vertices.at(1).color.at(1) + 
+							v_baryCoords.at(2) * vertices.at(2).color.at(1) ) / (v_baryCoords.at(0) + v_baryCoords.at(1) + v_baryCoords.at(2)) ;
+						b = (v_baryCoords.at(0) * vertices.at(0).color.at(2) + 
+							v_baryCoords.at(1) * vertices.at(1).color.at(2) + 
+							v_baryCoords.at(2) * vertices.at(2).color.at(2) ) / (v_baryCoords.at(0) + v_baryCoords.at(1) + v_baryCoords.at(2)) ;
+					}
+					else if (mode == 1) {
+
+					}
+					else if (mode == 2) {
+						
+					}
+
 
 					// r = v_baryCoords.at(0) * int(shapeR);
 					// g = v_baryCoords.at(1) * int(shapeG);
@@ -337,7 +386,8 @@ struct BoundedBox {
 		
 		return result;
 	} 
-	vector<float> barycentricCompute(int x, int y) {
+
+	vector<float> barycentricCompute(int x, int y ) {
 		// cout << "entered" << endl;
 		float x0 = vertices.at(0).x * t.scale + t.tx;
 		float y0 = vertices.at(0).y * t.scale + t.ty;
@@ -504,7 +554,7 @@ int main(int argc, char **argv)
 
 				BoundedBox bb(vertices[0], vertices[1], vertices[2], width, height, bb_parent.t);
 
-				bb.drawImage(image);
+				bb.drawImage(image, colorMode);
 			// if (vertices.size() == 3) {
 			// 	BoundedBox bb(vertices[0], vertices[1], vertices[2], width, height, bb_parent.t);
 
