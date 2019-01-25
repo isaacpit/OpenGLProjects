@@ -15,13 +15,61 @@
 using namespace std;
 
 struct ZBuffer {
-	vector<vector<int>> z;
-}
+	vector<vector<float>> z;
+
+	// returns true if the current z is closer
+	bool checkZ(int i, int j, float _z) {
+		if (i >= z.size()){
+			cout << "ERROR: OUT OF BOUNDS" << endl;
+			return false;
+		}
+		if (j >= z.at(i).size()) {
+			cout << "ERROR: OUT OF BOUNDS" << endl;
+			return false;
+		}
+
+		cout << "x: " << i << " y: " << j << endl;
+		cout << "currentZ: " << z.at(i).at(j) << endl;
+		cout << "newZ: " << _z << endl;
+
+		if (_z < min) {
+			cout << "NEW GLOBAL MIN: " << _z << endl;
+			cout << "PREV GLOBAL MIN: " << _z << endl;
+			min=_z;
+		}
+		if (_z > max) {
+			cout << "NEW GLOBAL MAX: " << _z << endl;
+			cout << "PREV GLOBAL MAX: " << max << endl;
+			max = _z;
+
+		}
+
+		if (_z > z.at(i).at(j)) {
+			z.at(i).at(j) = _z;
+			
+			return true;
+		}
+		return false;
+	}
+	ZBuffer(int w, int h) {
+		min=-__FLT_MAX__;
+		max=-__FLT_MAX__;
+		vector<vector<float>> tmp(w, vector<float> (h, -__FLT_MAX__));
+		z = tmp;
+
+	}
+	// void draw
+
+	float min;
+	float max;
+};
 
 struct Transformation {
 	int tx;
 	int ty;
 	float scale;
+	float max_z;
+	float min_z;
 };
 
 struct Vertex {
@@ -54,8 +102,8 @@ struct BoundedBox {
 
 		for (int i = 0; i < vertices.size(); ++i) {
 
-			cout << "vertices.at(" << i << ").y: " << vertices.at(i).y << endl;
-			cout << "max_y" << endl;
+			// cout << "vertices.at(" << i << ").y: " << vertices.at(i).y << endl;
+			// cout << "max_y" << endl;
 			if (vertices.at(i).x < min_x) min_x = vertices.at(i).x;
 			if (vertices.at(i).y < min_y) min_y = vertices.at(i).y;
 			if (vertices.at(i).z < min_z) min_z = vertices.at(i).z;
@@ -70,22 +118,22 @@ struct BoundedBox {
 		// max_x = max_x * t.scale + t.tx;
 		// max_y = max_y * t.scale + t.ty;
 
-		cout << 
-		"BoundedBox::BoundedBox(v1, v2, v3) ----------------------" << endl;
-		cout << "BEFORE *****************" << endl;
-		cout << "x: [" << min_x << ", " << max_x << "]" << endl;
-		cout << "y: [" << min_y << ", " << max_y << "]" << endl;
-		cout << "z: [" << min_z << ", " << max_z << "]" << endl;
+		// cout << 
+		// "BoundedBox::BoundedBox(v1, v2, v3) ----------------------" << endl;
+		// cout << "BEFORE *****************" << endl;
+		// cout << "x: [" << min_x << ", " << max_x << "]" << endl;
+		// cout << "y: [" << min_y << ", " << max_y << "]" << endl;
+		// cout << "z: [" << min_z << ", " << max_z << "]" << endl;
 		min_x = min_x * t.scale + t.tx;
 		min_y = min_y * t.scale + t.ty;
 		max_x = max_x * t.scale + t.tx;
 		max_y = max_y * t.scale + t.ty;
-		cout << "AFTER *****************" << endl;
-		cout << "x: [" << min_x << ", " << max_x << "]" << endl;
-		cout << "y: [" << min_y << ", " << max_y << "]" << endl;
-		cout << "z: [" << min_z << ", " << max_z << "]" << endl;
-		cout << 
-		"---------------------------------------------------------" << endl;
+		// cout << "AFTER *****************" << endl;
+		// cout << "x: [" << min_x << ", " << max_x << "]" << endl;
+		// cout << "y: [" << min_y << ", " << max_y << "]" << endl;
+		// cout << "z: [" << min_z << ", " << max_z << "]" << endl;
+		// cout << 
+		// "---------------------------------------------------------" << endl;
 
 
 
@@ -101,18 +149,18 @@ struct BoundedBox {
 		max_x = v.at(0);
 		max_y = v.at(1);
 		max_z = v.at(2);
-			cout << "BEFORE" << endl;
-			cout << "min_x: " << min_x << endl;
-			cout << "min_y: " << min_y << endl;
-			cout << "min_z: " << min_z << endl;
-			cout << "max_x: " << max_x << endl;
-			cout << "max_y: " << max_y << endl;
-			cout << "max_z: " << max_z << endl;
+			// cout << "BEFORE" << endl;
+			// cout << "min_x: " << min_x << endl;
+			// cout << "min_y: " << min_y << endl;
+			// cout << "min_z: " << min_z << endl;
+			// cout << "max_x: " << max_x << endl;
+			// cout << "max_y: " << max_y << endl;
+			// cout << "max_z: " << max_z << endl;
 
 
 		for (int i = 0; i < v.size(); ++i) {
 			// x case
-			cout << "i: " << i << " **********************" << endl;
+			// cout << "i: " << i << " **********************" << endl;
 			// cout << "min_x: " << min_x << endl;
 			// cout << "min_y: " << min_y << endl;
 			// cout << "min_z: " << min_z << endl;
@@ -120,9 +168,9 @@ struct BoundedBox {
 			// cout << "max_y: " << max_y << endl;
 			// cout << "max_z: " << max_z << endl;
 			if (i % 3 == 0) {
-				cout << "v.at(i): " << v.at(i) << endl;
-				cout << " v.at(i) < min_x: " << (v.at(i) < min_x) << endl;
-				cout << " v.at(i) > max_x: " << (v.at(i) > min_x) << endl;
+				// cout << "v.at(i): " << v.at(i) << endl;
+				// cout << " v.at(i) < min_x: " << (v.at(i) < min_x) << endl;
+				// cout << " v.at(i) > max_x: " << (v.at(i) > min_x) << endl;
 				if (v.at(i) < min_x) {
 					min_x = v.at(i);
 				}
@@ -155,20 +203,20 @@ struct BoundedBox {
 		float sy = abs(float(height) / (max_y - min_y));
 
 
-		cout << "sx: " << sx << endl;
-		cout << "sy: " << sy << endl;
+		// cout << "sx: " << sx << endl;
+		// cout << "sy: " << sy << endl;
 
 		Vertex middleOfImage;
 		middleOfImage.x = width / 2;
 		middleOfImage.y = height / 2;
 
-		cout << "m(x_i): " << middleOfImage.x << endl;
-		cout << "m(y_i): " << middleOfImage.y << endl;
+		// cout << "m(x_i): " << middleOfImage.x << endl;
+		// cout << "m(y_i): " << middleOfImage.y << endl;
 
 		scale = (sx < sy) ? sx : sy;
-		cout << "scale: " << scale << endl;
+		// cout << "scale: " << scale << endl;
 
-		cout << "AFTER" << endl;
+		// cout << "AFTER" << endl;
 			cout << "min_x: " << min_x << endl;
 			cout << "min_y: " << min_y << endl;
 			cout << "min_z: " << min_z << endl;
@@ -179,35 +227,38 @@ struct BoundedBox {
 		
 		Vertex middleOfWorld;
 		middleOfWorld.x = scale * (max_x + min_x) / 2.0;
-		cout << "max_x - min_x | world: " << scale * (max_x + min_x) << endl;
+		// cout << "max_x - min_x | world: " << scale * (max_x + min_x) << endl;
 		middleOfWorld.y = scale * (max_y + min_y) / 2.0;
-		cout << "max_y - min_y | world: " << scale* (max_y + min_y) << endl;
+		// cout << "max_y - min_y | world: " << scale* (max_y + min_y) << endl;
 
-		cout << "m(x_w): " << middleOfWorld.x << endl;
-		cout << "m(y_w): " << middleOfWorld.y << endl;
+		// cout << "m(x_w): " << middleOfWorld.x << endl;
+		// cout << "m(y_w): " << middleOfWorld.y << endl;
 
 		tx = middleOfImage.x - middleOfWorld.x;
 		ty = middleOfImage.y - middleOfWorld.y;
 
-		cout << "tx: " << tx << endl;
-		cout << "ty: " << ty << endl;
+		// cout << "tx: " << tx << endl;
+		// cout << "ty: " << ty << endl;
 
 		
 		t.scale = scale;
 		t.tx = tx;
 		t.ty = ty;
+		t.max_z = max_z;
+		t.min_z = min_z;
 
-		cout << 
-		"BoundedBox::BoundedBox(x, y, x2, y2) ----------------------" << endl;
-		cout << "x: [" << min_x << ", " << max_x << "]" << endl;
-		cout << "y: [" << min_y << ", " << max_y << "]" << endl;
-		cout << "z: [" << min_z << ", " << max_z << "]" << endl;
-		cout << 
-		"---------------------------------------------------------" << endl;
+
+		// cout << 
+		// "BoundedBox::BoundedBox(x, y, x2, y2) ----------------------" << endl;
+		// cout << "x: [" << min_x << ", " << max_x << "]" << endl;
+		// cout << "y: [" << min_y << ", " << max_y << "]" << endl;
+		// cout << "z: [" << min_z << ", " << max_z << "]" << endl;
+		// cout << 
+		// "---------------------------------------------------------" << endl;
 
 	}
 
-	void drawImage(shared_ptr<Image> &image, int mode = 0) {
+	void drawImage(shared_ptr<Image> &image, int mode = 0, ZBuffer *zbuf = new ZBuffer(0, 0)) {
 
 		unsigned char shapeR = 0;
 		unsigned char shapeG = 0;
@@ -268,9 +319,9 @@ struct BoundedBox {
 			bot.z=0;
 			top.color = { shapeRBot, shapeGBot, shapeBBot};
 		}
-		cout << "shapeR: " << int(shapeR) << endl;
-		cout << "shapeG: " << int(shapeG) << endl;
-		cout << "shapeB: " << int(shapeB) << endl;
+		// cout << "shapeR: " << int(shapeR) << endl;
+		// cout << "shapeG: " << int(shapeG) << endl;
+		// cout << "shapeB: " << int(shapeB) << endl;
 
 
 
@@ -279,7 +330,7 @@ struct BoundedBox {
 		// cout << "g: " << int(shapeG) << endl;
 		// cout << "b: " << int(shapeB) << endl;
 
-		cout << "LOOPING THROUGH " << endl;
+		// cout << "LOOPING THROUGH " << endl;
 		// cout << "x: [" << min_x << ", " << max_x << "]" << endl;
 		// cout << "y: [" << min_y << ", " << max_y << "]" << endl;
 		// cout << "z: [" << min_z << ", " << max_z << "]" << endl;
@@ -287,9 +338,9 @@ struct BoundedBox {
 		int bot_x = min_x; int top_x = max_x; 
 		int bot_y = min_y; int top_y = max_y; 
 		int bot_z = min_z; int top_z = max_z; 
-		cout << "x: [" << bot_x << ", " << top_x << "]" << endl;
-		cout << "y: [" << bot_y << ", " << top_y << "]" << endl;
-		cout << "z: [" << bot_z << ", " << top_z << "]" << endl;
+		// cout << "x: [" << bot_x << ", " << top_x << "]" << endl;
+		// cout << "y: [" << bot_y << ", " << top_y << "]" << endl;
+		// cout << "z: [" << bot_z << ", " << top_z << "]" << endl;
 
 		for (int i = bot_x; i <= top_x; ++i) {
 			for (int j = bot_y; j <= top_y; ++j) {
@@ -333,7 +384,45 @@ struct BoundedBox {
 							v_baryCoords.at(2) * vertices.at(2).color.at(2) ) / (v_baryCoords.at(0) + v_baryCoords.at(1) + v_baryCoords.at(2)) ;
 					}
 					else if (mode == 1) {
+						// cout << "************************************** " << endl;
+						// cout << "v_0.z: " << vertices.at(0).z << endl;
+						// cout << "v_1.z: " << vertices.at(1).z << endl;
+						// cout << "v_2.z: " << vertices.at(2).z << endl;
+						// cout << "v_bary0: " << v_baryCoords.at(0) << endl;
+						// cout << "v_bary1: " << v_baryCoords.at(1) << endl;
+						// cout << "v_bary2: " << v_baryCoords.at(2) << endl;
+						float interpolatedZ = (vertices.at(0).z * v_baryCoords.at(0) + 
+							vertices.at(1).z * v_baryCoords.at(1) + 
+							vertices.at(2).z * v_baryCoords.at(2));
+						// cout << "interpolatedZ: " << interpolatedZ << endl;
 
+						bool replaced = zbuf->checkZ(i, j, interpolatedZ);
+						// cout << "was replaced: " << replaced << endl;
+
+						if (replaced) {
+							float diff = (t.max_z - t.min_z) / 2.0f ;
+							// cout << "global.max_z: " << t.max_z << " global.min_z: " << t.min_z << endl;
+						
+							// if (interpolatedZ >= t.max_z) {
+							// 	// cout << "Z IS TOO BIG" << endl;
+							// }
+							// else {
+								// cout << "diff: " << diff << endl;
+								r = 255.0f * interpolatedZ / diff ;
+								// if (r > 255 || r < 0) {
+								g = 0;
+								b = 0;
+								cout << "r: " << int(r) << " g: " << int(g) << " b: " << int(b) << endl;
+								image->setPixel(i, j, r, g , b);
+							// }
+
+						}
+						// else {
+						// 	r = 0;
+						// 	g = 0;
+						// 	b = 0;
+						// }
+						
 					}
 					else if (mode == 2) {
 						
@@ -343,7 +432,10 @@ struct BoundedBox {
 					// r = v_baryCoords.at(0) * int(shapeR);
 					// g = v_baryCoords.at(1) * int(shapeG);
 					// b = v_baryCoords.at(2) * int(shapeB);
-					image->setPixel(i, j, r, g, b);
+					if (mode == 0 || mode == 2 ) {
+						image->setPixel(i, j, r, g, b);
+					}
+
 				}
 				// else {
 				// 	// cout << " IS NOT INSIDE" << endl;
@@ -401,7 +493,6 @@ struct BoundedBox {
 								barycentricHelper(x1, y1, 2, 0);
 		float gamma = barycentricHelper(x, y, 0, 1) / 
 								barycentricHelper(x2, y2, 0, 1);
-		
 
 		
 		vector<float> result = { alpha, beta, gamma };
@@ -411,15 +502,15 @@ struct BoundedBox {
 		bool insideAlpha = result.at(0) >= 0 && result.at(0) <= 1;
 		bool insideBeta = result.at(1) >= 0 && result.at(1) <= 1;
 		bool insideGamma = result.at(2) >= 0 && result.at(2) <= 1;
-		cout << " (" << setw(5) << x << "," << setw(5) << y << ") => ";
-		cout << " \u03B1: " << setw(8) <<alpha;
-		cout << " \u03B2: " << setw(8) << beta;
-		cout << " \u03B3: " << setw(8) << gamma;
+		// cout << " (" << setw(5) << x << "," << setw(5) << y << ") => ";
+		// cout << " \u03B1: " << setw(8) <<alpha;
+		// cout << " \u03B2: " << setw(8) << beta;
+		// cout << " \u03B3: " << setw(8) << gamma;
 		if (insideAlpha && insideBeta && insideGamma) {
-			cout << " IN" <<endl;
+			// cout << " IN" <<endl;
 		}
 		else {
-			cout << " OUT" << endl;
+			// cout << " OUT" << endl;
 		}
 
 		return result;
@@ -480,12 +571,12 @@ int main(int argc, char **argv)
 		// vertices.
 		// Loop over shapes
 		for(size_t s = 0; s < shapes.size(); s++) {
-			cout << "shape[" << s << "]" << endl;
+			// cout << "shape[" << s << "]" << endl;
 			// Loop over faces (polygons)
 			size_t index_offset = 0;
 
 			for(size_t f = 0; f < shapes[s].mesh.num_face_vertices.size(); f++) {
-				cout << "face[" << f << "]" << endl;
+				// cout << "face[" << f << "]" << endl;
 				vector<Vertex> vertices;
 
 				size_t fv = shapes[s].mesh.num_face_vertices[f];
@@ -526,10 +617,19 @@ int main(int argc, char **argv)
 	}
 
 	BoundedBox bb_parent(posBuf, width, height);
+	cout << "got here" << endl;
+	ZBuffer zbuf(width, height);
+	// cout << "zbuf.w" << zbuf.z[0].size() << endl;
+	// for (int i = 0; i < width; ++i) {
+	// 	for (int j = 0; j < height; ++j) {
+	// 		cout << zbuf.z[i][j] << " ";
+	// 	}
+	// 	cout << endl;
+	// }
 
-	for (int i = 0; i < posBuf.size(); ++i) {
-		// cout << "posBuf[" << i << "]: " << posBuf.at(i) << endl;
-	}
+	// for (int i = 0; i < posBuf.size(); ++i) {
+	// 	// cout << "posBuf[" << i << "]: " << posBuf.at(i) << endl;
+	// }
 
 	for (size_t s = 0; s < shapes.size(); ++s) {
 
@@ -554,7 +654,7 @@ int main(int argc, char **argv)
 
 				BoundedBox bb(vertices[0], vertices[1], vertices[2], width, height, bb_parent.t);
 
-				bb.drawImage(image, colorMode);
+				bb.drawImage(image, colorMode, &zbuf);
 			// if (vertices.size() == 3) {
 			// 	BoundedBox bb(vertices[0], vertices[1], vertices[2], width, height, bb_parent.t);
 

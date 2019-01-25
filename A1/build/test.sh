@@ -27,9 +27,9 @@ fi
 printf "working with file $f"
 make -j4 
 printf '%*s\n' "${COLUMNS:-$(tput cols)}" '' | tr ' ' '*' 
-echo "cat ../resources/$f.obj"
-printf '%*s\n' "${COLUMNS:-$(tput cols)}" '' | tr ' ' '*' 
-cat ../resources/$f.obj
+#echo "cat ../resources/$f.obj"
+#printf '%*s\n' "${COLUMNS:-$(tput cols)}" '' | tr ' ' '*' 
+#cat ../resources/$f.obj
 printf '%*s\n' "${COLUMNS:-$(tput cols)}" '' | tr ' ' '*' 
 printf "./A1 ../resources/$f.obj $f.png $w $h $m\n"
 printf '%*s\n' "${COLUMNS:-$(tput cols)}" '' | tr ' ' '*' 
