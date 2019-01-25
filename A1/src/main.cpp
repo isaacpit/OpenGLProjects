@@ -28,18 +28,18 @@ struct ZBuffer {
 			return false;
 		}
 
-		cout << "x: " << i << " y: " << j << endl;
-		cout << "currentZ: " << z.at(i).at(j) << endl;
-		cout << "newZ: " << _z << endl;
+		// cout << "x: " << i << " y: " << j << endl;
+		// cout << "currentZ: " << z.at(i).at(j) << endl;
+		// cout << "newZ: " << _z << endl;
 
-		if (_z < min) {
-			cout << "NEW GLOBAL MIN: " << _z << endl;
-			cout << "PREV GLOBAL MIN: " << _z << endl;
+		if (_z <= min) {
+			// cout << "NEW GLOBAL MIN: " << _z << endl;
+			// cout << "PREV GLOBAL MIN: " << _z << endl;
 			min=_z;
 		}
-		if (_z > max) {
-			cout << "NEW GLOBAL MAX: " << _z << endl;
-			cout << "PREV GLOBAL MAX: " << max << endl;
+		if (_z >= max) {
+			// cout << "NEW GLOBAL MAX: " << _z << endl;
+			// cout << "PREV GLOBAL MAX: " << max << endl;
 			max = _z;
 
 		}
@@ -52,9 +52,9 @@ struct ZBuffer {
 		return false;
 	}
 	ZBuffer(int w, int h) {
-		min=-__FLT_MAX__;
-		max=-__FLT_MAX__;
-		vector<vector<float>> tmp(w, vector<float> (h, -__FLT_MAX__));
+		min=__FLT_MIN__;
+		max=__FLT_MIN__;
+		vector<vector<float>> tmp(w, vector<float> (h, min));
 		z = tmp;
 
 	}
@@ -70,6 +70,8 @@ struct Transformation {
 	float scale;
 	float max_z;
 	float min_z;
+	float GLOBAL_max_y;
+	float GLOBAL_min_y;
 };
 
 struct Vertex {
@@ -82,7 +84,27 @@ struct Vertex {
 		cout << "x: " << setw(4) << x << " y: " << setw(4) << y 
 			<< " z: " << setw(4) << z << endl;
 	}
+
+	
 };
+
+Vertex operator-(Vertex a, Vertex b) {
+	Vertex tmp;
+	tmp.x = a.x - b.x;
+	tmp.y = a.y - b.y;
+	tmp.z = a.z - b.z;
+	return tmp;
+}
+
+float Dot(Vertex a, Vertex b) {
+	float result = 0.0f;
+	result = a.x * b.x + a.y * b.y + a.z * b.z;
+	return result;
+
+
+
+}
+
 
 struct BoundedBox {
 	BoundedBox(Vertex &v1, Vertex &v2, Vertex &v3, int _w, int _h, Transformation _tran) :
@@ -246,7 +268,8 @@ struct BoundedBox {
 		t.ty = ty;
 		t.max_z = max_z;
 		t.min_z = min_z;
-
+		t.GLOBAL_max_y = max_y * scale + ty;
+		t.GLOBAL_min_y = min_y * scale + ty;
 
 		// cout << 
 		// "BoundedBox::BoundedBox(x, y, x2, y2) ----------------------" << endl;
@@ -275,9 +298,9 @@ struct BoundedBox {
 			// shapeR = rand() % 256;
 			// shapeG = rand() % 256;
 			// shapeB = rand() % 256;
-			shapeR = rand() % 128 + 127;
-			shapeG = rand() % 128 + 127;
-			shapeB = rand() % 128 + 127;
+			// shapeR = rand() % 128 + 127;
+			// shapeG = rand() % 128 + 127;
+			// shapeB = rand() % 128 + 127;
 
 			unsigned char shapeR0 = rand() % 256;
 			unsigned char shapeG0 = rand() % 256;
@@ -296,7 +319,7 @@ struct BoundedBox {
 			
 		}
 		else if (mode == 1) {
-			r = 255;
+			r = 0;
 			g = 0;
 			b = 0;
 		}
@@ -306,7 +329,7 @@ struct BoundedBox {
 			unsigned char shapeGTop = 0;
 			unsigned char shapeBTop = 0;
 			top.x=0;
-			top.y=max_y;
+			top.y=t.GLOBAL_max_y;
 			top.z=0;
 			top.color = {shapeRTop, shapeGTop, shapeBTop };
 
@@ -315,9 +338,9 @@ struct BoundedBox {
 			unsigned char shapeGBot = 0;
 			unsigned char shapeBBot = 255;
 			bot.x=0;
-			bot.y=min_y;
+			bot.y=t.GLOBAL_min_y;
 			bot.z=0;
-			top.color = { shapeRBot, shapeGBot, shapeBBot};
+			bot.color = { shapeRBot, shapeGBot, shapeBBot};
 		}
 		// cout << "shapeR: " << int(shapeR) << endl;
 		// cout << "shapeG: " << int(shapeG) << endl;
@@ -345,8 +368,12 @@ struct BoundedBox {
 		for (int i = bot_x; i <= top_x; ++i) {
 			for (int j = bot_y; j <= top_y; ++j) {
 
-				int chunk = i / 10;
+				// int chunk = i / 10;
 				// cout << "chunk is : " << chunk << endl;
+				Vertex p;
+				// p.x = i;
+				// p.y = j;
+				
 				vector<float> v_baryCoords = barycentricCompute(i, j);
 				// if (mode == 0) {
 				// 	v_baryCoords = barycentricCompute(i, j);
@@ -375,13 +402,15 @@ struct BoundedBox {
 					if (mode == 0) {
 						r = (v_baryCoords.at(0) * vertices.at(0).color.at(0) + 
 							v_baryCoords.at(1) * vertices.at(1).color.at(0) + 
-							v_baryCoords.at(2) * vertices.at(2).color.at(0) ) / (v_baryCoords.at(0) + v_baryCoords.at(1) + v_baryCoords.at(2)) ;
+							v_baryCoords.at(2) * vertices.at(2).color.at(0) ) ;
 						g = (v_baryCoords.at(0) * vertices.at(0).color.at(1) + 
 							v_baryCoords.at(1) * vertices.at(1).color.at(1) + 
-							v_baryCoords.at(2) * vertices.at(2).color.at(1) ) / (v_baryCoords.at(0) + v_baryCoords.at(1) + v_baryCoords.at(2)) ;
+							v_baryCoords.at(2) * vertices.at(2).color.at(1) ) ;
 						b = (v_baryCoords.at(0) * vertices.at(0).color.at(2) + 
 							v_baryCoords.at(1) * vertices.at(1).color.at(2) + 
-							v_baryCoords.at(2) * vertices.at(2).color.at(2) ) / (v_baryCoords.at(0) + v_baryCoords.at(1) + v_baryCoords.at(2)) ;
+							v_baryCoords.at(2) * vertices.at(2).color.at(2) ) ;
+
+						image->setPixel(i, j, r, g, b);
 					}
 					else if (mode == 1) {
 						// cout << "************************************** " << endl;
@@ -397,10 +426,12 @@ struct BoundedBox {
 						// cout << "interpolatedZ: " << interpolatedZ << endl;
 
 						bool replaced = zbuf->checkZ(i, j, interpolatedZ);
-						// cout << "was replaced: " << replaced << endl;
+						// cout << "was replaced: " << replaced << " : ";
 
 						if (replaced) {
-							float diff = (t.max_z - t.min_z) / 2.0f ;
+							float diff = (t.max_z - t.min_z) / 2.0f;
+							float distance = t.max_z - t.min_z;
+							
 							// cout << "global.max_z: " << t.max_z << " global.min_z: " << t.min_z << endl;
 						
 							// if (interpolatedZ >= t.max_z) {
@@ -408,33 +439,86 @@ struct BoundedBox {
 							// }
 							// else {
 								// cout << "diff: " << diff << endl;
-								r = 255.0f * interpolatedZ / diff ;
-								// if (r > 255 || r < 0) {
+								// cout << "r before: " << int(r) << endl;
+								// if (interpolatedZ > t.max_z)
+								if (interpolatedZ > t.max_z) {
+									interpolatedZ = t.max_z;
+								}
+								else if (interpolatedZ < t.min_z) {
+									interpolatedZ = t.min_z;
+								}
+
+								float lambda = (1.0f - (t.max_z - interpolatedZ)/distance);
+
+								// cout << lambda << endl;
+								// r = 225.0f * lambda + 30.0f;
+								r = 255.0f * interpolatedZ / diff;
+								// r = 225.0f * interpolatedZ / diff + 30.0f;
+								// r = 255.0f * (1.0f - (t.max_z - interpolatedZ) / diff);
+								// r = 255.0f * (t.max_z - interpolatedZ) 
+								// if (r < 50) {
+								// 	r = r * 8;
+								// }
+								// r = 255.0f - r;
+								// if (interpolatedZ > t.max_z || interpolatedZ < t.min_z) { 
+								// 	cout << "Z IS OUT OF BOUNDS: " << interpolatedZ <<  endl;
+								// 	return;
+								// }
 								g = 0;
 								b = 0;
-								cout << "r: " << int(r) << " g: " << int(g) << " b: " << int(b) << endl;
+								// cout << "(" << i << ", " << j << ", " << interpolatedZ << ") r: " << int(r) << " g: " << int(g) << " b: " << int(b) << endl;
 								image->setPixel(i, j, r, g , b);
 							// }
 
 						}
-						// else {
+						else {
 						// 	r = 0;
 						// 	g = 0;
 						// 	b = 0;
-						// }
+								// cout << "(" << i << ", " << j << ", " << interpolatedZ << ")" << endl;
+
+						}
 						
 					}
 					else if (mode == 2) {
+						float distanceTop = sqrt(pow(top.y - j, 2));
+						float distanceBot = sqrt(pow(bot.y - j, 2));
+						float deltaY = top.y - bot.y;
+
+						float partTop = (1.0f - distanceTop / deltaY);
+						float partBot = (1.0f - distanceBot / deltaY);
 						
+						cout << "x: " << i << " y: " << j;
+						// cout << " distanceTop: " << distanceTop;
+						// cout << " distanceBot: " << distanceBot;
+						cout << " deltaY: "  << deltaY ; 
+						cout << " partTop: " << partTop << " partBot: " << partBot;
+						cout << endl;
+
+						r = partTop * top.color.at(0) + partBot * bot.color.at(0);
+						g = partTop * top.color.at(1) + partBot * bot.color.at(1);
+						b = partTop * top.color.at(2) + partBot * bot.color.at(2);
+
+						image->setPixel(i, j, r, g ,b);
+						// r = distanceTop;
+						// r = (v_baryCoords.at(0) * vertices.at(0).color.at(0) + 
+						// 	v_baryCoords.at(1) * vertices.at(1).color.at(0) + 
+						// 	v_baryCoords.at(2) * vertices.at(2).color.at(0) ) ;
+						// g = (v_baryCoords.at(0) * vertices.at(0).color.at(1) + 
+						// 	v_baryCoords.at(1) * vertices.at(1).color.at(1) + 
+						// 	v_baryCoords.at(2) * vertices.at(2).color.at(1) ) ;
+						// b = (v_baryCoords.at(0) * vertices.at(0).color.at(2) + 
+						// 	v_baryCoords.at(1) * vertices.at(1).color.at(2) + 
+						// 	v_baryCoords.at(2) * vertices.at(2).color.at(2) ) ;
 					}
 
 
 					// r = v_baryCoords.at(0) * int(shapeR);
 					// g = v_baryCoords.at(1) * int(shapeG);
 					// b = v_baryCoords.at(2) * int(shapeB);
-					if (mode == 0 || mode == 2 ) {
-						image->setPixel(i, j, r, g, b);
-					}
+					// if (mode == 0) {
+					// 	image->setPixel(i, j, r, g, b);
+					// }
 
 				}
 				// else {
@@ -479,7 +563,7 @@ struct BoundedBox {
 		return result;
 	} 
 
-	vector<float> barycentricCompute(int x, int y ) {
+	vector<float> barycentricCompute(int x, int y) {
 		// cout << "entered" << endl;
 		float x0 = vertices.at(0).x * t.scale + t.tx;
 		float y0 = vertices.at(0).y * t.scale + t.ty;
@@ -494,24 +578,28 @@ struct BoundedBox {
 		float gamma = barycentricHelper(x, y, 0, 1) / 
 								barycentricHelper(x2, y2, 0, 1);
 
+		// int C = 2; int B = 1; int A = 0;
+		// Vertex v0 = vertices.at(B) - vertices.at(A);
+		// Vertex v1 = vertices.at(C) - vertices.at(B);
+		// Vertex v2 = vertices.at()
 		
 		vector<float> result = { alpha, beta, gamma };
 
 
 
-		bool insideAlpha = result.at(0) >= 0 && result.at(0) <= 1;
-		bool insideBeta = result.at(1) >= 0 && result.at(1) <= 1;
-		bool insideGamma = result.at(2) >= 0 && result.at(2) <= 1;
-		// cout << " (" << setw(5) << x << "," << setw(5) << y << ") => ";
-		// cout << " \u03B1: " << setw(8) <<alpha;
-		// cout << " \u03B2: " << setw(8) << beta;
-		// cout << " \u03B3: " << setw(8) << gamma;
-		if (insideAlpha && insideBeta && insideGamma) {
-			// cout << " IN" <<endl;
-		}
-		else {
-			// cout << " OUT" << endl;
-		}
+		// bool insideAlpha = result.at(0) >= 0 && result.at(0) <= 1;
+		// bool insideBeta = result.at(1) >= 0 && result.at(1) <= 1;
+		// bool insideGamma = result.at(2) >= 0 && result.at(2) <= 1;
+		// // cout << " (" << setw(5) << x << "," << setw(5) << y << ") => ";
+		// // cout << " \u03B1: " << setw(8) <<alpha;
+		// // cout << " \u03B2: " << setw(8) << beta;
+		// // cout << " \u03B3: " << setw(8) << gamma;
+		// if (insideAlpha && insideBeta && insideGamma) {
+		// 	// cout << " IN" <<endl;
+		// }
+		// else {
+		// 	// cout << " OUT" << endl;
+		// }
 
 		return result;
 	}
