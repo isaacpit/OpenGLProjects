@@ -429,8 +429,9 @@ struct BoundedBox {
 						// cout << "was replaced: " << replaced << " : ";
 
 						if (replaced) {
-							float diff = (t.max_z - t.min_z) / 2.0f;
-							float distance = t.max_z - t.min_z;
+							float diff = (t.max_z - t.min_z) ;
+							// float diff = (t.max_z - t.min_z) / 10.0f; // LOOKS DISGUSTIN
+							// float distance = t.max_z - t.min_z;
 							
 							// cout << "global.max_z: " << t.max_z << " global.min_z: " << t.min_z << endl;
 						
@@ -448,11 +449,11 @@ struct BoundedBox {
 									interpolatedZ = t.min_z;
 								}
 
-								float lambda = (1.0f - (t.max_z - interpolatedZ)/distance);
+								// float lambda = (1.0f - (t.max_z - interpolatedZ)/distance);
 
 								// cout << lambda << endl;
 								// r = 225.0f * lambda + 30.0f;
-								r = 255.0f * interpolatedZ / diff;
+								r = 255.0f * (interpolatedZ / diff);
 								// r = 225.0f * interpolatedZ / diff + 30.0f;
 								// r = 255.0f * (1.0f - (t.max_z - interpolatedZ) / diff);
 								// r = 255.0f * (t.max_z - interpolatedZ) 
@@ -464,8 +465,8 @@ struct BoundedBox {
 								// 	cout << "Z IS OUT OF BOUNDS: " << interpolatedZ <<  endl;
 								// 	return;
 								// }
-								g = 0;
-								b = 0;
+								g = 255.0f * (interpolatedZ / diff);
+								b = 255.0f * (interpolatedZ / diff);
 								// cout << "(" << i << ", " << j << ", " << interpolatedZ << ") r: " << int(r) << " g: " << int(g) << " b: " << int(b) << endl;
 								image->setPixel(i, j, r, g , b);
 							// }
