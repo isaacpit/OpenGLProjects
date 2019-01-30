@@ -3,4 +3,5 @@ glfw-3.2.1/
 glm-stable/
 *build*
 *.obj
+.vscode
 

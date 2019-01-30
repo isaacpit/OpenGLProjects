@@ -2,20 +2,42 @@
 #include <string>
 #include <iomanip>
 #include <cstdlib>
+#include "../../glm-stable/glm/glm.hpp"
 
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "tiny_obj_loader.h"
 
 #include "Image.h"
 
+const int A_POS = 0;
+const int B_POS = 1;
+const int C_POS = 2;
+
+const int X_POS = 0;
+const int Y_POS = 1;
+const int Z_POS = 2;
+
+const int RED = 0;
+const int GREEN = 1;
+const int BLUE = 2;
+
+// const int R_POS=0;
+// const int G_POS=1;
+// const int B_POS=2;
+
 // This allows you to skip the `std::` in front of C++ standard library
 // functions. You can also say `using std::cout` to be more selective.
 // You should never do this in a header file.
 
 using namespace std;
+using glm::vec3;
+
+// credit:
+// https://gamedev.stackexchange.com/questions/23743/whats-the-most-efficient-way-to-find-barycentric-coordinates
+
 
 struct ZBuffer {
-	vector<vector<float>> z;
+	vector<vector<double>> z;
 
 	// returns true if the current z is closer
 	bool checkZ(int i, int j, float _z) {
@@ -45,6 +67,9 @@ struct ZBuffer {
 		}
 
 		if (_z > z.at(i).at(j)) {
+			// cout << "currentZ: " << z.at(i).at(j) << endl;
+			// cout << "newZ: " << _z << endl;
+
 			z.at(i).at(j) = _z;
 			
 			return true;
@@ -52,9 +77,10 @@ struct ZBuffer {
 		return false;
 	}
 	ZBuffer(int w, int h) {
-		min=__FLT_MIN__;
-		max=__FLT_MIN__;
-		vector<vector<float>> tmp(w, vector<float> (h, min));
+		min=-__DBL_MAX__;
+		max=__DBL_MAX__;
+		// double BADMIN=__DBL_MIN__;
+		vector<vector<double>> tmp(w, vector<double> (h, min));
 		z = tmp;
 
 	}
@@ -64,567 +90,266 @@ struct ZBuffer {
 	float max;
 };
 
+
+void Barycentric(vec3 p, vec3 a, vec3 b, vec3 c, double& u, double& v, double& w) {
+		
+    vec3 v0 = b - a, v1 = c - a, v2 = p - a;
+		// printf("v0 (%f, %f, %f)\n", v0[0], v0[1], v0[2]);
+		
+    double d00 = glm::dot(v0, v0);
+    double d01 = glm::dot(v0, v1);
+    double d11 = glm::dot(v1, v1);
+    double d20 = glm::dot(v2, v0);
+    double d21 = glm::dot(v2, v1);
+    double denom = d00 * d11 - d01 * d01;
+    v = (d11 * d20 - d01 * d21) / denom;
+    w = (d00 * d21 - d01 * d20) / denom;
+    u = 1.0f - v - w;
+}
+
 struct Transformation {
+	double scale;
 	int tx;
 	int ty;
-	float scale;
-	float max_z;
-	float min_z;
-	float GLOBAL_max_y;
-	float GLOBAL_min_y;
 };
 
-struct Vertex {
-	vector<int> color;
-	float x;
-	float y;
-	float z;
 
-	void printVertex() {
-		cout << "x: " << setw(4) << x << " y: " << setw(4) << y 
-			<< " z: " << setw(4) << z << endl;
-	}
-
-	
+struct MinMax {
+	vec3 min;
+	vec3 max;
 };
-
-Vertex operator-(Vertex a, Vertex b) {
-	Vertex tmp;
-	tmp.x = a.x - b.x;
-	tmp.y = a.y - b.y;
-	tmp.z = a.z - b.z;
-	return tmp;
-}
-
-float Dot(Vertex a, Vertex b) {
-	float result = 0.0f;
-	result = a.x * b.x + a.y * b.y + a.z * b.z;
-	return result;
-
-
-
-}
 
 
 struct BoundedBox {
-	BoundedBox(Vertex &v1, Vertex &v2, Vertex &v3, int _w, int _h, Transformation _tran) :
-			width(_w), height(_h), t(_tran)
-	 {
-		
-		// initialize
-		vertices.push_back(v1);
-		vertices.push_back(v2);
-		vertices.push_back(v3);
-		min_x = vertices.at(0).x;
-		min_y = vertices.at(0).y;
-		min_z = vertices.at(0).z;
-		max_x = vertices.at(0).x;
-		max_y = vertices.at(0).y;
-		max_z = vertices.at(0).z;
 
+
+	BoundedBox(vector<vec3> v, MinMax g_w,MinMax g_i, Transformation t, shared_ptr<Image> &image, ZBuffer* zb, int m = 0) { 
+		// image=im;
+		zbuf = zb;
+		globals_image = g_i;
+		globals_world = g_w;
+		// globals_world = 
+		vertices = v;
+		mode = m;
+		tran = t;
+
+
+
+		if (mode == 0) {
+			colorA= {rand() % 256, rand() %256, rand() %256};
+			colorB= {rand() % 256, rand() %256, rand() %256};
+			colorC= {rand() % 256, rand() %256, rand() %256};
+		} 
+		else if (mode == 1) {
+			// fixme set colors
+			
+			// r = 0;
+			// g = 255;
+			// b = 0;
+		}
+		else if (mode == 2) {
+			topColor = {255, 0 , 0};
+			botColor = {0, 0, 255};
+			//fixme set colors
+		}
+
+
+		// printf("colorA RGB: {%3i, %3i, %3i}\n", colorA[RED], colorA[GREEN], colorA[BLUE]);
+		// printf("colorB RGB: {%3i, %3i, %3i}\n", colorB[RED], colorB[GREEN], colorB[BLUE]);
+		// printf("colorC RGB: {%3i, %3i, %3i}\n", colorC[RED], colorC[GREEN], colorC[BLUE]);
+
+		findLocalMinMax();
+
+		BoundsLoop(image);
+		
+	}
+	void findLocalMinMax() {
+
+		local.min = vec3(vertices[A_POS][X_POS], vertices[A_POS][Y_POS], vertices[A_POS][Z_POS]);
+		local.max = vec3(vertices[A_POS][X_POS], vertices[A_POS][Y_POS], vertices[A_POS][Z_POS]);
+		// printf("A(%f, %f, %f)\n", vertices[A_POS][X_POS], vertices[A_POS][Y_POS], vertices[A_POS][Z_POS]);
+		// printf("B(%f, %f, %f)\n", vertices[B_POS][X_POS], vertices[B_POS][Y_POS], vertices[B_POS][Z_POS]);
+		// printf("C(%f, %f, %f)\n", vertices[C_POS][X_POS], vertices[C_POS][Y_POS], vertices[C_POS][Z_POS]);
 		for (int i = 0; i < vertices.size(); ++i) {
+			
+			if (vertices.at(i)[X_POS] < local.min[X_POS]) {
+				local.min[X_POS] = vertices.at(i)[X_POS];
+			}
+			if (vertices.at(i)[Y_POS] < local.min[Y_POS]) {
+				local.min[Y_POS] = vertices.at(i)[Y_POS];
+			}
+			if (vertices.at(i)[Z_POS] < local.min[Z_POS]) {
+				local.min[Z_POS] = vertices.at(i)[Z_POS];
+			}
 
-			// cout << "vertices.at(" << i << ").y: " << vertices.at(i).y << endl;
-			// cout << "max_y" << endl;
-			if (vertices.at(i).x < min_x) min_x = vertices.at(i).x;
-			if (vertices.at(i).y < min_y) min_y = vertices.at(i).y;
-			if (vertices.at(i).z < min_z) min_z = vertices.at(i).z;
-			if (vertices.at(i).x > max_x) max_x = vertices.at(i).x;
-			if (vertices.at(i).y > max_y) max_y = vertices.at(i).y;
-			if (vertices.at(i).z > max_z) max_z = vertices.at(i).z;
-
+			if (vertices.at(i)[X_POS] > local.max[X_POS]) {
+				local.max[X_POS] = vertices.at(i)[X_POS];
+			}
+			if (vertices.at(i)[Y_POS] > local.max[Y_POS]) {
+				local.max[Y_POS] = vertices.at(i)[Y_POS];
+			}
+			if (vertices.at(i)[Z_POS] > local.max[Z_POS]) {
+				local.max[Z_POS] = vertices.at(i)[Z_POS];
+			}
 		}
+		// printf("x in { %10f, %10f, %10f } yields [%10f, %10f] \n", vertices.at(A_POS)[X_POS],
+		// 	vertices.at(B_POS)[X_POS],
+		// 	vertices.at(C_POS)[X_POS], 
+		// 	local.min[X_POS],
+		// 	local.max[X_POS]);
+		// printf("y in { %10f, %10f, %10f } yields [%10f, %10f] \n", vertices.at(A_POS)[Y_POS],
+		// 	vertices.at(B_POS)[Y_POS],
+		// 	vertices.at(C_POS)[Y_POS],
+		// 	local.min[Y_POS],
+		// 	local.max[Y_POS]);
+		// printf("z in { %10f, %10f, %10f } yields [%10f, %10f] \n", vertices.at(A_POS)[Z_POS],
+		// 	vertices.at(B_POS)[Z_POS],
+		// 	vertices.at(C_POS)[Z_POS],
+		// 	local.min[Z_POS],
+		// 	local.max[Z_POS]);
 
-		// min_x = min_x * t.scale + t.tx;
-		// min_y = min_y * t.scale + t.ty;
-		// max_x = max_x * t.scale + t.tx;
-		// max_y = max_y * t.scale + t.ty;
+		// TO IMAGE COORDS
+		vertices_image={vec3(), vec3(), vec3()};
+		
+		local_image.min = vec3();
+		local_image.max = vec3();
 
-		// cout << 
-		// "BoundedBox::BoundedBox(v1, v2, v3) ----------------------" << endl;
-		// cout << "BEFORE *****************" << endl;
-		// cout << "x: [" << min_x << ", " << max_x << "]" << endl;
-		// cout << "y: [" << min_y << ", " << max_y << "]" << endl;
-		// cout << "z: [" << min_z << ", " << max_z << "]" << endl;
-		min_x = min_x * t.scale + t.tx;
-		min_y = min_y * t.scale + t.ty;
-		max_x = max_x * t.scale + t.tx;
-		max_y = max_y * t.scale + t.ty;
-		// cout << "AFTER *****************" << endl;
-		// cout << "x: [" << min_x << ", " << max_x << "]" << endl;
-		// cout << "y: [" << min_y << ", " << max_y << "]" << endl;
-		// cout << "z: [" << min_z << ", " << max_z << "]" << endl;
-		// cout << 
-		// "---------------------------------------------------------" << endl;
+		ToImageCoords(vertices_image.at(A_POS), vertices.at(A_POS));
+		ToImageCoords(vertices_image.at(B_POS), vertices.at(B_POS));
+		ToImageCoords(vertices_image.at(C_POS), vertices.at(C_POS));
 
+		ToImageCoords(local_image.min, local.min);
+		ToImageCoords(local_image.max, local.max);
+		
 
 
 	}
-	BoundedBox(vector<float> &v, int _w, int _h) :
-		width(_w), height(_h) 
-		{
 
-		min_x = v.at(0);
-		min_y = v.at(1);
-		min_z = v.at(2);
+	void BoundsLoop(shared_ptr<Image> &image) {
+		// printf("Loop bounds x[%10f, %10f] y[%10f, %10f]\n", 
+		// 	local_image.min[X_POS], 
+		// 	local_image.max[X_POS],
+		// 	local_image.min[Y_POS], 
+		// 	local_image.max[Y_POS]);
 
-		max_x = v.at(0);
-		max_y = v.at(1);
-		max_z = v.at(2);
-			// cout << "BEFORE" << endl;
-			// cout << "min_x: " << min_x << endl;
-			// cout << "min_y: " << min_y << endl;
-			// cout << "min_z: " << min_z << endl;
-			// cout << "max_x: " << max_x << endl;
-			// cout << "max_y: " << max_y << endl;
-			// cout << "max_z: " << max_z << endl;
+		for (int i = local_image.min[X_POS]; i <= local_image.max[X_POS]; ++i) {
+			for (int j = local_image.min[Y_POS]; j <= local_image.max[Y_POS]; ++j) {
+				double u, v, w;
+				vec3 p = vec3(i, j, 0);
+				// printf("p (%f, %f, %f)\t", p[0], p[1], p[2]);
+				Barycentric(p, 
+				vertices_image.at(A_POS), 
+				vertices_image.at(B_POS), 
+				vertices_image.at(C_POS),
+				u, v, w);
+				// printf("u+v+w=%f | ", u+v+w);
+				// printf("(%10f, %10f, %10f) \n", u, v, w, u+v+w);
+				bool inTriangle = (0 <= u) && (u <= 1) && 
+					(0 <= v) && (v <= 1) && 
+					(0 <= w) && (w <= 1);
+				if (inTriangle) {
+					ColorLogic(i, j, u, v, w, image);
+				}
 
 
-		for (int i = 0; i < v.size(); ++i) {
-			// x case
-			// cout << "i: " << i << " **********************" << endl;
-			// cout << "min_x: " << min_x << endl;
-			// cout << "min_y: " << min_y << endl;
-			// cout << "min_z: " << min_z << endl;
-			// cout << "max_x: " << max_x << endl;
-			// cout << "max_y: " << max_y << endl;
-			// cout << "max_z: " << max_z << endl;
-			if (i % 3 == 0) {
-				// cout << "v.at(i): " << v.at(i) << endl;
-				// cout << " v.at(i) < min_x: " << (v.at(i) < min_x) << endl;
-				// cout << " v.at(i) > max_x: " << (v.at(i) > min_x) << endl;
-				if (v.at(i) < min_x) {
-					min_x = v.at(i);
-				}
-				if (v.at(i) > max_x) {
-					max_x = v.at(i);
-				}
-			}
-			// y case
-			else if (i % 3 == 1) {
-				if (v.at(i) < min_y) {
-					min_y = v.at(i);
-				}
-				if (v.at(i) > max_y) {
-					max_y = v.at(i);
-				}
-			}
-			// z case 
-			else if (i % 3 == 2) {
-				if (v.at(i) < min_z) {
-					min_z = v.at(i);
-				}
-				if (v.at(i) > max_z) {
-					max_z = v.at(i);
-				}
+				
 			}
 		}
-
-
-		float sx = abs(float(width) / (max_x - min_x));
-		float sy = abs(float(height) / (max_y - min_y));
-
-
-		// cout << "sx: " << sx << endl;
-		// cout << "sy: " << sy << endl;
-
-		Vertex middleOfImage;
-		middleOfImage.x = width / 2;
-		middleOfImage.y = height / 2;
-
-		// cout << "m(x_i): " << middleOfImage.x << endl;
-		// cout << "m(y_i): " << middleOfImage.y << endl;
-
-		scale = (sx < sy) ? sx : sy;
-		// cout << "scale: " << scale << endl;
-
-		// cout << "AFTER" << endl;
-			cout << "min_x: " << min_x << endl;
-			cout << "min_y: " << min_y << endl;
-			cout << "min_z: " << min_z << endl;
-			cout << "max_x: " << max_x << endl;
-			cout << "max_y: " << max_y << endl;
-			cout << "max_z: " << max_z << endl;
-
-		
-		Vertex middleOfWorld;
-		middleOfWorld.x = scale * (max_x + min_x) / 2.0;
-		// cout << "max_x - min_x | world: " << scale * (max_x + min_x) << endl;
-		middleOfWorld.y = scale * (max_y + min_y) / 2.0;
-		// cout << "max_y - min_y | world: " << scale* (max_y + min_y) << endl;
-
-		// cout << "m(x_w): " << middleOfWorld.x << endl;
-		// cout << "m(y_w): " << middleOfWorld.y << endl;
-
-		tx = middleOfImage.x - middleOfWorld.x;
-		ty = middleOfImage.y - middleOfWorld.y;
-
-		// cout << "tx: " << tx << endl;
-		// cout << "ty: " << ty << endl;
-
-		
-		t.scale = scale;
-		t.tx = tx;
-		t.ty = ty;
-		t.max_z = max_z;
-		t.min_z = min_z;
-		t.GLOBAL_max_y = max_y * scale + ty;
-		t.GLOBAL_min_y = min_y * scale + ty;
-
-		// cout << 
-		// "BoundedBox::BoundedBox(x, y, x2, y2) ----------------------" << endl;
-		// cout << "x: [" << min_x << ", " << max_x << "]" << endl;
-		// cout << "y: [" << min_y << ", " << max_y << "]" << endl;
-		// cout << "z: [" << min_z << ", " << max_z << "]" << endl;
-		// cout << 
-		// "---------------------------------------------------------" << endl;
-
 	}
 
-	void drawImage(shared_ptr<Image> &image, int mode = 0, ZBuffer *zbuf = new ZBuffer(0, 0)) {
 
-		unsigned char shapeR = 0;
-		unsigned char shapeG = 0;
-		unsigned char shapeB = 0;
-
+	void ColorLogic(int x, int y, const double &u, const double &v, const double &w, shared_ptr<Image> &image) {
 		unsigned char r = 0;
 		unsigned char g = 0;
 		unsigned char b = 0;
 
-		// used when color mode = 2
-		Vertex top;
-		Vertex bot;
-		if (mode == 0) {
-			// shapeR = rand() % 256;
-			// shapeG = rand() % 256;
-			// shapeB = rand() % 256;
-			// shapeR = rand() % 128 + 127;
-			// shapeG = rand() % 128 + 127;
-			// shapeB = rand() % 128 + 127;
+		double interpolatedZ = u * vertices.at(A_POS)[Z_POS] + 
+			v * vertices.at(B_POS)[Z_POS] + 
+			w * vertices.at(C_POS)[Z_POS];
 
-			unsigned char shapeR0 = rand() % 256;
-			unsigned char shapeG0 = rand() % 256;
-			unsigned char shapeB0 = rand() % 256;
-			unsigned char shapeR1 = rand() % 256;
-			unsigned char shapeG1 = rand() % 256;
-			unsigned char shapeB1 = rand() % 256;
-			unsigned char shapeR2 = rand() % 256;
-			unsigned char shapeG2 = rand() % 256;
-			unsigned char shapeB2 = rand() % 256;
+		bool replaced = zbuf->checkZ(x, y, interpolatedZ); 
 
+		if (mode == 0 && replaced) {
+			r = u * colorA.at(RED) + v * colorB.at(RED) + w * colorC.at(RED);
+			g = u * colorA.at(GREEN) + v * colorB.at(GREEN) + w * colorC.at(GREEN);
+			b = u * colorA.at(BLUE) + v * colorB.at(BLUE) + w * colorC.at(BLUE);
 
-			vertices.at(0).color = {shapeR0, shapeG0, shapeB0};
-			vertices.at(1).color = {shapeR1, shapeG1, shapeB1};
-			vertices.at(2).color = {shapeR2, shapeG2, shapeB2};
-			
+			// printf("xy: (%3i, %3i) | uvw: {%5f, %5f, %5f} | RGB: (%i, %i, %i)\n", x, y, u, v, w, r, g, b);
+			image->setPixel(x, y, r, g, b);
 		}
-		else if (mode == 1) {
+		else if (mode == 1 && replaced) {
+
+			double width = (globals_world.max[Z_POS] - globals_world.min[Z_POS]);
+			double distanceFromMax = globals_world.max[Z_POS] - interpolatedZ;
+			double ratio = distanceFromMax / width;
+
+			double scale = 255.0 * (1 - ratio);
+			int int_scale = int(scale);
+
 			r = 0;
 			g = 0;
-			b = 0;
+			b = int_scale;
+
+			image->setPixel(x, y, r, g, b);
 		}
-		else if (mode == 2) {
+		else if (mode == 2 && replaced) {
+			double distanceTop = sqrt(pow(globals_image.max[Y_POS] - y, 2));
+			double distanceBot = sqrt(pow(globals_image.min[Y_POS] - y, 2));
+			double deltaY = globals_image.max[Y_POS] - globals_image.min[Y_POS];
 
-			unsigned char shapeRTop = 255;
-			unsigned char shapeGTop = 0;
-			unsigned char shapeBTop = 0;
-			top.x=0;
-			top.y=t.GLOBAL_max_y;
-			top.z=0;
-			top.color = {shapeRTop, shapeGTop, shapeBTop };
+			// cout << " distanceTop: " << distanceTop << endl;
+			// cout << " distanceBot: " << distanceBot << endl;
 
+			double partTop = (1.0f - distanceTop / deltaY);
+			double partBot = (1.0f - distanceBot / deltaY);
 
-			unsigned char shapeRBot = 0;
-			unsigned char shapeGBot = 0;
-			unsigned char shapeBBot = 255;
-			bot.x=0;
-			bot.y=t.GLOBAL_min_y;
-			bot.z=0;
-			bot.color = { shapeRBot, shapeGBot, shapeBBot};
+			r = partTop * topColor.at(RED) + partBot * botColor.at(RED);
+			g = partTop * topColor.at(GREEN) + partBot * botColor.at(GREEN);
+			b = partTop * topColor.at(BLUE) + partBot * botColor.at(BLUE);
+
+			image->setPixel(x, y, r, g, b);
 		}
-		// cout << "shapeR: " << int(shapeR) << endl;
-		// cout << "shapeG: " << int(shapeG) << endl;
-		// cout << "shapeB: " << int(shapeB) << endl;
 
-
-
-		// cout << "BEFORE _________ " << endl;
-		// cout << "r: " << int(shapeR) << endl;
-		// cout << "g: " << int(shapeG) << endl;
-		// cout << "b: " << int(shapeB) << endl;
-
-		// cout << "LOOPING THROUGH " << endl;
-		// cout << "x: [" << min_x << ", " << max_x << "]" << endl;
-		// cout << "y: [" << min_y << ", " << max_y << "]" << endl;
-		// cout << "z: [" << min_z << ", " << max_z << "]" << endl;
-
-		int bot_x = min_x; int top_x = max_x; 
-		int bot_y = min_y; int top_y = max_y; 
-		int bot_z = min_z; int top_z = max_z; 
-		// cout << "x: [" << bot_x << ", " << top_x << "]" << endl;
-		// cout << "y: [" << bot_y << ", " << top_y << "]" << endl;
-		// cout << "z: [" << bot_z << ", " << top_z << "]" << endl;
-
-		for (int i = bot_x; i <= top_x; ++i) {
-			for (int j = bot_y; j <= top_y; ++j) {
-
-				// int chunk = i / 10;
-				// cout << "chunk is : " << chunk << endl;
-				Vertex p;
-				// p.x = i;
-				// p.y = j;
-				
-				vector<float> v_baryCoords = barycentricCompute(i, j);
-				// if (mode == 0) {
-				// 	v_baryCoords = barycentricCompute(i, j);
-				// }
-				// else if (mode == 2) {
-				// 	v_baryCoords = barycentricCompute(i, j);
-				// }
-
-				// float sum = v_baryCoords.at(0) + v_baryCoords.at(1) + v_baryCoords.at(2);
-				// cout << "sum: " << sum << endl;
-				bool insideAlpha = v_baryCoords.at(0) >= 0 && v_baryCoords.at(0) <= 1;
-				bool insideBeta = v_baryCoords.at(1) >= 0 && v_baryCoords.at(1) <= 1;
-				bool insideGamma = v_baryCoords.at(2) >= 0 && v_baryCoords.at(2) <= 1;
-
-				// cout << "x: " << i << " y: " << j;
-				if (insideAlpha && insideBeta && insideGamma) {
-					// cout << " IS INSIDE" << endl;
-					// cout << "r: " << int(r) << endl;
-					// cout << "g: " << int(g) << endl;
-					// cout << "b: " << int() << endl;
-
-					// r = shapeR;
-					// g = shapeG;
-					// b = shapeB;
-
-					if (mode == 0) {
-						r = (v_baryCoords.at(0) * vertices.at(0).color.at(0) + 
-							v_baryCoords.at(1) * vertices.at(1).color.at(0) + 
-							v_baryCoords.at(2) * vertices.at(2).color.at(0) ) ;
-						g = (v_baryCoords.at(0) * vertices.at(0).color.at(1) + 
-							v_baryCoords.at(1) * vertices.at(1).color.at(1) + 
-							v_baryCoords.at(2) * vertices.at(2).color.at(1) ) ;
-						b = (v_baryCoords.at(0) * vertices.at(0).color.at(2) + 
-							v_baryCoords.at(1) * vertices.at(1).color.at(2) + 
-							v_baryCoords.at(2) * vertices.at(2).color.at(2) ) ;
-
-						image->setPixel(i, j, r, g, b);
-					}
-					else if (mode == 1) {
-						// cout << "************************************** " << endl;
-						// cout << "v_0.z: " << vertices.at(0).z << endl;
-						// cout << "v_1.z: " << vertices.at(1).z << endl;
-						// cout << "v_2.z: " << vertices.at(2).z << endl;
-						// cout << "v_bary0: " << v_baryCoords.at(0) << endl;
-						// cout << "v_bary1: " << v_baryCoords.at(1) << endl;
-						// cout << "v_bary2: " << v_baryCoords.at(2) << endl;
-						float interpolatedZ = (vertices.at(0).z * v_baryCoords.at(0) + 
-							vertices.at(1).z * v_baryCoords.at(1) + 
-							vertices.at(2).z * v_baryCoords.at(2));
-						// cout << "interpolatedZ: " << interpolatedZ << endl;
-
-						bool replaced = zbuf->checkZ(i, j, interpolatedZ);
-						// cout << "was replaced: " << replaced << " : ";
-
-						if (replaced) {
-							float diff = (t.max_z - t.min_z) ;
-							// float diff = (t.max_z - t.min_z) / 10.0f; // LOOKS DISGUSTIN
-							// float distance = t.max_z - t.min_z;
-							
-							// cout << "global.max_z: " << t.max_z << " global.min_z: " << t.min_z << endl;
-						
-							// if (interpolatedZ >= t.max_z) {
-							// 	// cout << "Z IS TOO BIG" << endl;
-							// }
-							// else {
-								// cout << "diff: " << diff << endl;
-								// cout << "r before: " << int(r) << endl;
-								// if (interpolatedZ > t.max_z)
-								if (interpolatedZ > t.max_z) {
-									interpolatedZ = t.max_z;
-								}
-								else if (interpolatedZ < t.min_z) {
-									interpolatedZ = t.min_z;
-								}
-
-								// float lambda = (1.0f - (t.max_z - interpolatedZ)/distance);
-
-								// cout << lambda << endl;
-								// r = 225.0f * lambda + 30.0f;
-								r = 255.0f * (interpolatedZ / diff);
-								// r = 225.0f * interpolatedZ / diff + 30.0f;
-								// r = 255.0f * (1.0f - (t.max_z - interpolatedZ) / diff);
-								// r = 255.0f * (t.max_z - interpolatedZ) 
-								// if (r < 50) {
-								// 	r = r * 8;
-								// }
-								// r = 255.0f - r;
-								// if (interpolatedZ > t.max_z || interpolatedZ < t.min_z) { 
-								// 	cout << "Z IS OUT OF BOUNDS: " << interpolatedZ <<  endl;
-								// 	return;
-								// }
-								g = 255.0f * (interpolatedZ / diff);
-								b = 255.0f * (interpolatedZ / diff);
-								// cout << "(" << i << ", " << j << ", " << interpolatedZ << ") r: " << int(r) << " g: " << int(g) << " b: " << int(b) << endl;
-								image->setPixel(i, j, r, g , b);
-							// }
-
-						}
-						else {
-						// 	r = 0;
-						// 	g = 0;
-						// 	b = 0;
-								// cout << "(" << i << ", " << j << ", " << interpolatedZ << ")" << endl;
-
-						}
-						
-					}
-					else if (mode == 2) {
-						float distanceTop = sqrt(pow(top.y - j, 2));
-						float distanceBot = sqrt(pow(bot.y - j, 2));
-						float deltaY = top.y - bot.y;
-
-						float partTop = (1.0f - distanceTop / deltaY);
-						float partBot = (1.0f - distanceBot / deltaY);
-						
-						cout << "x: " << i << " y: " << j;
-						// cout << " distanceTop: " << distanceTop;
-						// cout << " distanceBot: " << distanceBot;
-						cout << " deltaY: "  << deltaY ; 
-						cout << " partTop: " << partTop << " partBot: " << partBot;
-						cout << endl;
-
-						r = partTop * top.color.at(0) + partBot * bot.color.at(0);
-						g = partTop * top.color.at(1) + partBot * bot.color.at(1);
-						b = partTop * top.color.at(2) + partBot * bot.color.at(2);
-
-						image->setPixel(i, j, r, g ,b);
-						// r = distanceTop;
-						// r = (v_baryCoords.at(0) * vertices.at(0).color.at(0) + 
-						// 	v_baryCoords.at(1) * vertices.at(1).color.at(0) + 
-						// 	v_baryCoords.at(2) * vertices.at(2).color.at(0) ) ;
-						// g = (v_baryCoords.at(0) * vertices.at(0).color.at(1) + 
-						// 	v_baryCoords.at(1) * vertices.at(1).color.at(1) + 
-						// 	v_baryCoords.at(2) * vertices.at(2).color.at(1) ) ;
-						// b = (v_baryCoords.at(0) * vertices.at(0).color.at(2) + 
-						// 	v_baryCoords.at(1) * vertices.at(1).color.at(2) + 
-						// 	v_baryCoords.at(2) * vertices.at(2).color.at(2) ) ;
-					}
-
-
-					// r = v_baryCoords.at(0) * int(shapeR);
-					// g = v_baryCoords.at(1) * int(shapeG);
-					// b = v_baryCoords.at(2) * int(shapeB);
-					// if (mode == 0) {
-					// 	image->setPixel(i, j, r, g, b);
-					// }
-
-				}
-				// else {
-				// 	// cout << " IS NOT INSIDE" << endl;
-				// 	r = 0;
-				// 	g = 0;
-				// 	b = 0;
-				// }
-				
-				// FIXME
-				if (mode == 0) {
-					// cout << "entered even case" << endl;
-					// r = rand() % 256;
-					// g = rand() % 256;
-					// b = rand() % 256;
-				}
-				// else {
-				// 	// cout << "entered odd case" << endl;
-				// 	r = 0;
-				// 	g = 0;
-				// 	b = 255;
-				// }
-				
-				// cout << "setting pixels | x: " << i << 
-				// 	" y: " << j << " r: " << int(r) << " g: " << int(g) << " b: " << int(b) << endl;
-
-
-
-			}
-		}
 	}
 
-	float barycentricHelper(int x, int y, int pos_a, int pos_b) {
-		float y_a = vertices.at(pos_a).y * t.scale + t.ty; 
-		float y_b = vertices.at(pos_b).y * t.scale + t.ty;
-		float x_a = vertices.at(pos_a).x * t.scale + t.tx;
-		float x_b = vertices.at(pos_b).x * t.scale + t.tx;
+	void ToImageCoords(vec3 &vec_image, const vec3 &vec_world) {
+
+		vec_image[X_POS] = tran.scale * vec_world[X_POS] + tran.tx;
+		vec_image[Y_POS] = tran.scale * vec_world[Y_POS] + tran.ty;
+		vec_image[Z_POS] = vec_world[Z_POS];
+
+		// printf("vec_world: (%10f, %10f, %10f) => (%10f, %10f, %10f)\n", 
+		// vec_world[X_POS], vec_world[Y_POS], vec_world[Z_POS],
+		// vec_image[X_POS], vec_image[Y_POS], vec_image[Z_POS]);
 		
-
-		float result = (y_a - y_b) * x + (x_b - x_a) * y + (x_a * y_b) - (x_b * y_a);
-		
-		return result;
-	} 
-
-	vector<float> barycentricCompute(int x, int y) {
-		// cout << "entered" << endl;
-		float x0 = vertices.at(0).x * t.scale + t.tx;
-		float y0 = vertices.at(0).y * t.scale + t.ty;
-		float x1 = vertices.at(1).x * t.scale + t.tx;
-		float y1 = vertices.at(1).y * t.scale + t.ty;
-		float x2 = vertices.at(2).x * t.scale + t.tx;
-		float y2 = vertices.at(2).y * t.scale + t.ty;
-		float alpha = barycentricHelper(x, y, 1, 2) / 
-								barycentricHelper(x0, y0, 1, 2);
-		float beta = barycentricHelper(x, y, 2, 0) / 
-								barycentricHelper(x1, y1, 2, 0);
-		float gamma = barycentricHelper(x, y, 0, 1) / 
-								barycentricHelper(x2, y2, 0, 1);
-
-		// int C = 2; int B = 1; int A = 0;
-		// Vertex v0 = vertices.at(B) - vertices.at(A);
-		// Vertex v1 = vertices.at(C) - vertices.at(B);
-		// Vertex v2 = vertices.at()
-		
-		vector<float> result = { alpha, beta, gamma };
-
-
-
-		// bool insideAlpha = result.at(0) >= 0 && result.at(0) <= 1;
-		// bool insideBeta = result.at(1) >= 0 && result.at(1) <= 1;
-		// bool insideGamma = result.at(2) >= 0 && result.at(2) <= 1;
-		// // cout << " (" << setw(5) << x << "," << setw(5) << y << ") => ";
-		// // cout << " \u03B1: " << setw(8) <<alpha;
-		// // cout << " \u03B2: " << setw(8) << beta;
-		// // cout << " \u03B3: " << setw(8) << gamma;
-		// if (insideAlpha && insideBeta && insideGamma) {
-		// 	// cout << " IN" <<endl;
-		// }
-		// else {
-		// 	// cout << " OUT" << endl;
-		// }
-
-		return result;
 	}
+	
+	
+	ZBuffer* zbuf;
+	MinMax globals_image;
+	MinMax globals_world;
+	MinMax local;
+	MinMax local_image;
+	vector<vec3> vertices_image;
+	vector<vec3> vertices;
+	Transformation tran;
+	int mode;
+	// shared_ptr<Image> image;
 
-	Transformation t;
+	vector<int> colorA;
+	vector<int> colorB;
+	vector<int> colorC;
 
-	vector<Vertex> vertices;
-	float min_x;
-	float min_y;
-	float min_z;
-	float max_x;
-	float max_y;
-	float max_z;
-
-	int width;
-	int height;
-
-	float scale;
-	float tx;
-	float ty;
+	vector<int> topColor;
+	vector<int> botColor;
 };
+
+
 
 int main(int argc, char **argv)
 {
+	srand (time(NULL));
+	// const int X_POS=0, Y_POS=1, Z_POS=2;
 	if(argc < 2) {
 		cout << "Usage: A1 meshfile" << endl;
 		return 0;
@@ -645,11 +370,18 @@ int main(int argc, char **argv)
 	auto image = make_shared<Image>(width, height);
 
 	// Load geometry
-	vector<float> posBuf; // list of vertex positions
+	vector<double> posBuf; // list of vertex positions
 	tinyobj::attrib_t attrib;
 	std::vector<tinyobj::shape_t> shapes;
 	std::vector<tinyobj::material_t> materials;
 	string errStr;
+
+	MinMax globals_world;
+	globals_world.min = vec3(FLT_MAX, FLT_MAX, FLT_MAX);
+	globals_world.max = vec3(FLT_MIN, FLT_MIN, FLT_MIN);
+
+	vector<vector<double>> frame_buffer;
+
 	bool rc = tinyobj::LoadObj(&attrib, &shapes, &materials, &errStr, meshName.c_str());
 	if(!rc) {
 		cerr << errStr << endl;
@@ -666,7 +398,7 @@ int main(int argc, char **argv)
 
 			for(size_t f = 0; f < shapes[s].mesh.num_face_vertices.size(); f++) {
 				// cout << "face[" << f << "]" << endl;
-				vector<Vertex> vertices;
+				// vector<Vertex> vertices;
 
 				size_t fv = shapes[s].mesh.num_face_vertices[f];
 				// Loop over vertices in the face.
@@ -677,25 +409,25 @@ int main(int argc, char **argv)
 					posBuf.push_back(attrib.vertices[3*idx.vertex_index+0]);
 					posBuf.push_back(attrib.vertices[3*idx.vertex_index+1]);
 					posBuf.push_back(attrib.vertices[3*idx.vertex_index+2]);
+					if (attrib.vertices[3*idx.vertex_index+0] < globals_world.min[0]) {
+						globals_world.min[0] = attrib.vertices[3*idx.vertex_index+0];
+					}
+					if (attrib.vertices[3*idx.vertex_index+1] < globals_world.min[1]) {
+						globals_world.min[1] = attrib.vertices[3*idx.vertex_index+1];
+					}
+					if (attrib.vertices[3*idx.vertex_index+2] < globals_world.min[2]) {
+						globals_world.min[2] = attrib.vertices[3*idx.vertex_index+2];
+					}
+					if (attrib.vertices[3*idx.vertex_index+0] > globals_world.max[0]) {
+						globals_world.max[0] = attrib.vertices[3*idx.vertex_index+0];
+					}
+					if (attrib.vertices[3*idx.vertex_index+1] > globals_world.max[1]) {
+						globals_world.max[1] = attrib.vertices[3*idx.vertex_index+1];
+					}
+					if (attrib.vertices[3*idx.vertex_index+2] > globals_world.max[2]) {
+						globals_world.max[2] = attrib.vertices[3*idx.vertex_index+2];
+					}
 				}
-				// 	Vertex temp_v;
-				// 	temp_v.x = attrib.vertices[3*idx.vertex_index+0];
-				// 	temp_v.y = attrib.vertices[3*idx.vertex_index+1];
-				// 	temp_v.z = attrib.vertices[3*idx.vertex_index+2];
-
-				// 	temp_v.printVertex();
-				// 	vertices.push_back(temp_v);
-				// }	
-
-				// if (vertices.size() == 3) {
-				// 	BoundedBox bb(vertices[0], vertices[1], vertices[2], width, height);
-
-				// 	// bb.drawImage(image);
-				// }
-				// else {
-				// 	cout << 
-				// 		"ERROR: face is not a triangle, has more than 3 vertices." << endl;
-				// }
 
 				index_offset += fv;
 				// per-face material (IGNORE)
@@ -705,45 +437,92 @@ int main(int argc, char **argv)
 		}
 	}
 
-	BoundedBox bb_parent(posBuf, width, height);
-	cout << "got here" << endl;
-	ZBuffer zbuf(width, height);
-	// cout << "zbuf.w" << zbuf.z[0].size() << endl;
-	// for (int i = 0; i < width; ++i) {
-	// 	for (int j = 0; j < height; ++j) {
-	// 		cout << zbuf.z[i][j] << " ";
-	// 	}
-	// 	cout << endl;
-	// }
+	cout << "x: [" << globals_world.min[X_POS] << ", " << globals_world.max[X_POS] << "]" << endl;
+	cout << "y: [" << globals_world.min[Y_POS] << ", " << globals_world.max[Y_POS] << "]" << endl;
+	cout << "z: [" << globals_world.min[Z_POS] << ", " << globals_world.max[Z_POS] << "]" << endl;
+	
+	double min_world_x = globals_world.min[X_POS];
+	double max_world_x = globals_world.max[X_POS];
+	double min_world_y = globals_world.min[Y_POS];
+	double max_world_y = globals_world.max[Y_POS];
+	double sx = abs(double(width) / (max_world_x - min_world_x));
+	double sy = abs(double(height) / (max_world_y - min_world_y));
+	cout << "scalex: " << sx << endl;
+	cout << "scaley: " << sy << endl;
 
-	// for (int i = 0; i < posBuf.size(); ++i) {
-	// 	// cout << "posBuf[" << i << "]: " << posBuf.at(i) << endl;
-	// }
+	double scale = (sx < sy) ? sx : sy;
+	cout << "scale: " << scale << endl;
+
+	vector<double> middle_image(2);
+	middle_image.at(X_POS) = width / 2;
+	middle_image.at(Y_POS) = height / 2; 
+
+	cout << "middle_image X: " << middle_image.at(X_POS) << endl;
+	cout << "middle_image Y: " << middle_image.at(Y_POS) << endl;
+
+	vector<double> middle_world(2);
+	// cout << "max_world_x: " << max_world_x << " min_world_x: " << min_world_x << endl;
+	middle_world.at(X_POS) = scale * (max_world_x + min_world_x) / 2;
+	middle_world.at(Y_POS) = scale * (max_world_y + min_world_y) / 2;
+
+	cout << "middle_world X: " << middle_world.at(X_POS) << endl;
+	cout << "middle_world Y: " << middle_world.at(Y_POS) << endl;
+
+	double tx = middle_image[X_POS] - middle_world[X_POS];
+	double ty = middle_image[Y_POS] - middle_world[Y_POS];
+
+	cout << "tx: " << tx << endl;
+	cout << "ty: " << ty << endl;
+
+	Transformation tran;
+	tran.tx = tx;
+	tran.ty = ty;
+	tran.scale = scale;
+
+	MinMax globals_image;
+
+	ZBuffer zbuf(width, height);
+	
+	globals_image.min = vec3(scale * globals_world.min[X_POS] + tx, scale * globals_world.min[Y_POS] + ty, -2016 );
+	globals_image.max = vec3(scale * globals_world.max[X_POS] + tx, scale * globals_world.max[Y_POS] + ty, -2016 );
+	vector<int> globals_min_image(2);
+	vector<int> globals_max_image(2);
+	
+	globals_min_image.at(X_POS) = globals_world.min[X_POS] * scale + tx;
+	globals_min_image.at(Y_POS) = globals_world.min[Y_POS] * scale + ty;
+
+	globals_max_image.at(X_POS) = globals_world.max[X_POS] * scale + tx;
+	globals_max_image.at(Y_POS) = globals_world.max[Y_POS] * scale + ty;
+
+	cout << "image x bounds: [" << globals_min_image[X_POS] << ", " << globals_max_image[X_POS] << "]" << endl;
+	cout << "image y bounds: [" << globals_min_image[Y_POS] << ", " << globals_max_image[Y_POS] << "]" << endl;
+	// cout << "image y bounds: [" << globals_image.min[Y_POS] << ", " << globals_image.max[Y_POS] << "]" << endl;
+	// vector<vector<double>> ZBuffer;
 
 	for (size_t s = 0; s < shapes.size(); ++s) {
 
 		size_t index_offset = 0;
 
 		for(size_t f = 0; f < shapes[s].mesh.num_face_vertices.size(); f++) {
-			vector<Vertex> vertices;
+			vector<vec3> vertices;
 			
 			size_t fv = shapes[s].mesh.num_face_vertices[f];
 
 			for(size_t v = 0; v < fv; v++) { 
 				tinyobj::index_t idx = shapes[s].mesh.indices[index_offset + v];
 			
-				Vertex temp_v;
-				temp_v.x = attrib.vertices[3*idx.vertex_index+0];
-				temp_v.y = attrib.vertices[3*idx.vertex_index+1];
-				temp_v.z = attrib.vertices[3*idx.vertex_index+2];
+				vec3 temp_v=vec3(attrib.vertices[3*idx.vertex_index+0], attrib.vertices[3*idx.vertex_index+1],
+				attrib.vertices[3*idx.vertex_index+2]);
+				// printf("%f %f %f\n", temp_v[0], temp_v[1], temp_v[2]);
 
 				// temp_v.printVertex();
 				vertices.push_back(temp_v);
 			}	
 
-				BoundedBox bb(vertices[0], vertices[1], vertices[2], width, height, bb_parent.t);
+			BoundedBox bb(vertices, globals_world, globals_image, tran,image, &zbuf, colorMode);
 
-				bb.drawImage(image, colorMode, &zbuf);
+				// bb.drawImage(image, colorMode, &zbuf);
+				
 			// if (vertices.size() == 3) {
 			// 	BoundedBox bb(vertices[0], vertices[1], vertices[2], width, height, bb_parent.t);
 
@@ -758,7 +537,7 @@ int main(int argc, char **argv)
 		}
 	}
 
-	cout << "Number of vertices: " << posBuf.size()/3 << endl;
+	// cout << "Number of vertices: " << posBuf.size()/3 << endl;
 	
 	image->writeToFile(outputFName);
 	return 0;
