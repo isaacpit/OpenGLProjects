@@ -4,4 +4,6 @@ glm-stable/
 *build*
 *.obj
 .vscode
-
+*.zip
+*.pdf
+*.log
