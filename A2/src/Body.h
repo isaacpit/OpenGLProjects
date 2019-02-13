@@ -8,6 +8,7 @@
 #include <cmath>
 #include <chrono>
 #include <ratio>
+#include <deque>
 
 #define GLEW_STATIC
 #include "../../glew-2.1.0/include/GL/glew.h"
@@ -28,6 +29,7 @@ using std::ostream;
 using std::string;
 using std::map;
 using glm::vec3;
+using std::deque;
 
 
 
@@ -49,6 +51,8 @@ private:
   Part* currentPart;
 
   Part* root;
+
+  deque<Part*> deq_parts;
 
   void nextPart();
   void prevPart();
@@ -81,6 +85,10 @@ private:
   bool delay(std::chrono::system_clock::time_point& t);
   
   void setVectorParts(vector<Part*> l_p);
+
+  bool populateDeque();
+
+  bool populateDeque_helper(Part* elem);
 
 };
 

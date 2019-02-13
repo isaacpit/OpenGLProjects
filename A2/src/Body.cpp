@@ -6,15 +6,13 @@ Body::Body() {
   currentPart = nullptr;
   root = nullptr;
   currPartIndex = 0;
+  deq_parts = {};
 }
 
 void Body::handleKey(int key, int mods) {
   int val = key + ! mods * 32;
   // cout << val << " was pressed with true value of: " << 
   //   char(val) << endl;
-  
-
-  
   
   switch (val) {
     case Body::KEY_BIG_X: {
@@ -59,7 +57,7 @@ void Body::handleKey(int key, int mods) {
       std::chrono::system_clock::time_point tock = std::chrono::system_clock::now();
       
       if (delay(tock)) {
-        cout << "nextPart delayed " << endl;
+        // cout << "nextPart delayed " << endl;
         break;
       }
       cout << "nextPart called " << endl;
@@ -73,7 +71,7 @@ void Body::handleKey(int key, int mods) {
       std::chrono::system_clock::time_point tock = std::chrono::system_clock::now();
       
       if (delay(tock)) {
-        cout << "prevPart delayed " << endl;
+        // cout << "prevPart delayed " << endl;
         break;
       }
       cout << "prevPart called " << endl;
@@ -117,19 +115,38 @@ void Body::setRoot(Part* p) {
 
 
 void Body::nextPart() {
-  currPartIndex++;
-  if (currPartIndex >= vec_parts.size()) {
-    currPartIndex = 0;
-  }
-  setCurrPartIndex(currPartIndex);
+  // currPartIndex++;
+  // if (currPartIndex >= vec_parts.size()) {
+  //   currPartIndex = 0;
+  // }
+  // setCurrPartIndex(currPartIndex);
+
+  // new implementation
+
+  // UNCOMMENT
+  deq_parts.push_back(currentPart);
+  currentPart = deq_parts.front();
+  deq_parts.pop_front();
+  for (int i = 0; i < deq_parts.size(); ++i) {
+    cout << deq_parts[i]->m_name << " ";
+  } cout << endl;
+
 }
 
 void Body::prevPart() {
-  currPartIndex--;
-  if (currPartIndex < 0) {
-    currPartIndex = vec_parts.size() - 1;
-  }
-  setCurrPartIndex(currPartIndex);
+  // currPartIndex--;
+  // if (currPartIndex < 0) {
+  //   currPartIndex = vec_parts.size() - 1;
+  // }
+  // setCurrPartIndex(currPartIndex);
+
+  // new implementation
+  deq_parts.push_front(currentPart);
+  currentPart = deq_parts.back();
+  deq_parts.pop_back();
+  for (int i = 0; i < deq_parts.size(); ++i) {
+    cout << deq_parts[i]->m_name << " ";
+  } cout << endl;
 }
 
 bool Body::delay(std::chrono::system_clock::time_point& tock) {
@@ -154,6 +171,26 @@ bool Body::delay(std::chrono::system_clock::time_point& tock) {
 
 void Body::setVectorParts(vector<Part*> v_p) {
   vec_parts = v_p;
+}
+
+bool Body::populateDeque() {
+  
+  // deq_parts.push_front(root);
+  populateDeque_helper(currentPart);
+  
+  deq_parts.pop_front();
+  
+  return true;
+}
+
+bool Body::populateDeque_helper(Part* elem) {
+
+  deq_parts.push_back(elem);
+  // cout << "called on : " << elem->m_name << endl;
+  for (int i = 0; i < elem->children.size(); ++i) {
+    populateDeque_helper(elem->children.at(i));
+  }
+
 }
 
 

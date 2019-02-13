@@ -61,7 +61,7 @@ static void key_callback(GLFWwindow *window, int key, int scancode, int action, 
 	Body * body = reinterpret_cast<Body *>(glfwGetWindowUserPointer(window));
 	
 	body->handleKey(key, mods);
-	cout << *body << endl;
+	// cout << *body << endl;
 	
 	if(key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
 		glfwSetWindowShouldClose(window, GL_TRUE);
@@ -357,6 +357,15 @@ void createFigure(Body* body) {
 
 	body->setVectorParts(parts);
 	body->setCurrPartIndex(0);
+
+	cout << "tst" << endl;
+	for (int i = 0; i < torso->children.size(); ++i) {
+		cout << torso->children.at(i)->m_name << " ";
+	}
+	cout << endl;
+
+	body->populateDeque();
+
 	
 }
 

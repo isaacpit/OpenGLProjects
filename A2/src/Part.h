@@ -54,12 +54,13 @@ class Part {
     int currElem;
     
     Part* parent;
-    vector<Part*> children;
+    
 
     int m_show;
 
 
   public:
+    vector<Part*> children;
 
     string m_name;
 
