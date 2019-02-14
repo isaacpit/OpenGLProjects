@@ -46,8 +46,7 @@ class Part {
     // vec3 vec3_scale;
     vec3 vec3_joint_scale;
     vec3 vec3_mesh_scale;
-    // vec3 vec3_rotation;
-    vec3 vec3_translation;
+
     vec3 vec3_joint_translation;
     vec3 vec3_mesh_translation;
 
@@ -55,9 +54,7 @@ class Part {
     
     Part* parent;
     
-
     int m_show;
-
 
   public:
     vector<Part*> children;

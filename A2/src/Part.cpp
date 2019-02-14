@@ -43,9 +43,6 @@ void Part::drawPart(MatrixStack* mv, map<string, GLint> unifIDs, int indCount, P
 
     mv->popMatrix();
 
-
-
-
   // draw children
   for (int i = 0; i < children.size(); ++i) {
     children.at(i)->drawPart(mv, unifIDs, indCount, currPart);
@@ -55,10 +52,6 @@ void Part::drawPart(MatrixStack* mv, map<string, GLint> unifIDs, int indCount, P
   if (!m_show) {
     mv->scale(0, 0, 0);
   }
-
-  // POSSIBLE FIX ME? DO I DRAW THIS? I THINK I DON'T
-  // glUniformMatrix4fv(unifIDs["MV"], 1, GL_FALSE, value_ptr(mv->topMatrix()));
-  // glDrawArrays(GL_TRIANGLES, 0, indCount);
 
   mv->popMatrix();
 }

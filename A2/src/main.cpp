@@ -319,9 +319,10 @@ void createFigure(Body* body) {
 	vec3 lowerLeftLegJointTrans(-lowerRightLegJointTrans[0], lowerRightLegJointTrans[1], lowerRightLegJointTrans[2]);
 	vec3 lowerLeftLegMeshTrans(-lowerRightLegMeshTrans[0], lowerRightLegMeshTrans[1], lowerRightLegMeshTrans[2]);
 
+	// initialize all Parts
 	Part* worldView = new Part("worldView", vec3(0, 0, 0), vec3(0, 0, 0), vec3(0, 1, -10), vec3(0, 0, 0), nullptr, {}, false, -1);
 
-	Part* torso = new Part("torso", vec3(2, 2, .1), vec3(1,1,1), vec3(0, 0, 0), vec3(0,0,0), worldView, {});
+	Part* torso = new Part("torso", vec3(2, 2, .1), vec3(1,1,.6), vec3(0, 0, 0), vec3(0,0,0), worldView, {});
 
 	Part* head = new Part("head", vec3(.5, .5, .5), vec3(1,1,1), vec3(0, 1.5, 0), vec3(0,0,0), torso, {});
 
@@ -337,8 +338,11 @@ void createFigure(Body* body) {
 	Part* upperLeftLeg = new Part("upperLeftLeg", upperLeftLegJointScale, upperLeftLegMeshScale, upperLeftLegJointTrans, upperLeftLegMeshTrans, torso, {});
 	Part* lowerLeftLeg = new Part("lowerLeftLeg", lowerLeftLegJointScale, lowerLeftLegMeshScale, lowerLeftLegJointTrans, lowerLeftLegMeshTrans, upperLeftLeg, {});
 
+	// initialize pointers to special parts
 	body->setRoot(worldView);
+	body->setCurrPart(torso);
 
+	// set hierarchy
 	worldView->setChildren({torso});
 
 	torso->setChildren({head, upperRightArm, upperLeftArm, upperRightLeg, upperLeftLeg});
@@ -349,21 +353,7 @@ void createFigure(Body* body) {
 	upperRightLeg->setChildren({lowerRightLeg});
 	upperLeftLeg->setChildren({lowerLeftLeg});
 
-	vector<Part*> parts = { torso, head, 
-	upperRightArm, lowerRightArm, 
-	upperLeftArm, lowerLeftArm, 
-	upperRightLeg, lowerRightLeg,
-	upperLeftLeg, lowerLeftLeg };
-
-	body->setVectorParts(parts);
-	body->setCurrPartIndex(0);
-
-	cout << "tst" << endl;
-	for (int i = 0; i < torso->children.size(); ++i) {
-		cout << torso->children.at(i)->m_name << " ";
-	}
-	cout << endl;
-
+	// initialize traversal structure 
 	body->populateDeque();
 
 	
