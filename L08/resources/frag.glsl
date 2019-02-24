@@ -23,10 +23,24 @@ void main()
 
 	vec4 l = normalize(lightPos_camera - fragPos_camera);
 
-	float dot_l_n = dot(l, n);
+	vec4 camera_c = vec4(0.0, 0.0, 0.0, 1.0);
+	vec4 e = normalize(camera_c - fragPos_camera);
+
+	vec4 h = normalize((l + e) /2);
+
+	float dot_h_n = max(0, dot(h, n));
+
+	float dot_l_n = max(0, dot(l, n));
 
 	vec3 cd = vec3(kd.r * dot_l_n, kd.g * dot_l_n, kd.b * dot_l_n);
-	vec3 c = vec3(ka.r + cd.r, ka.g + cd.g, ka.b + cd.b);
+
+	vec3 cs = vec3(
+		ks.r * pow(dot_h_n, s),
+		ks.g * pow(dot_h_n, s),
+		ks.b * pow(dot_h_n, s) );
+
+	vec3 c = vec3(ka.r + cd.r + cs.r, ka.g + cd.g + cs.g, ka.b + cd.b + cs.b);
+
 
 	gl_FragColor = vec4(c, 1.0);
 }
