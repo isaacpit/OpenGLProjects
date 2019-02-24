@@ -154,8 +154,8 @@ static void render()
 	glUniform3f(prog->getUniform("lightPos"), 1.0f, 1.0f, 1.0f);
 	glUniform3f(prog->getUniform("ka"), 0.2f, 0.2f, 0.2f);
 	glUniform3f(prog->getUniform("kd"), 0.8f, 0.7f, 0.7f);
-	glUniform3f(prog->getUniform("ks"), 0.0f, 0.0f, 0.0f);
-	glUniform1f(prog->getUniform("s"), 0.0f);
+	glUniform3f(prog->getUniform("ks"), 1.0f, 0.9f, 0.8f);
+	glUniform1f(prog->getUniform("s"), 200.0f);
 	shape->draw(prog);
 	prog->unbind();
 	

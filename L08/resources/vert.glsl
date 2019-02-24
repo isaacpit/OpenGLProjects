@@ -23,14 +23,12 @@ void main()
 	normal = vec4(aNor.x, aNor.y, aNor.z, 0.0);
 	normal = MV * normal;
 	
-
+	// already in camera space
 	lightPos_camera = vec4(lightPos.x, lightPos.y, lightPos.z, 1.0);
-	lightPos_camera = MV * lightPos_camera;
-
-	fragPos_camera = 	vec4(aPos.x, aPos.y, aPos.z, 1.0);
-	fragPos_camera = MV * fragPos_camera;
 	
-	// normal = vec4(gl_Position[0], gl_Position[1], gl_Position[2], 0.0);
+
+	fragPos_camera = vec4(aPos.x, aPos.y, aPos.z, 1.0);
+	fragPos_camera = MV * fragPos_camera;
 
 	color = vec3(0.5, 0.5, 0.5);
 }
