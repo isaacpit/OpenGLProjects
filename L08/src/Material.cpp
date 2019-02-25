@@ -3,7 +3,6 @@
 
 void Material::nextMat() {
   currMatIndex = (currMatIndex + 1 >= materials.size()) ? 0 : currMatIndex + 1;
-
 }
 
 void Material::prevMat() {

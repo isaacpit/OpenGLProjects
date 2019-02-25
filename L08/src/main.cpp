@@ -23,11 +23,80 @@
 
 using namespace std;
 
+using glm::vec4;
+
+
+
+struct CelMatNode {
+	CelMatNode(vec4 v1, vec4 v2, vec4 v3, vec4 v4, vec3 v5) : c1(v1), c2(v2), c3(v3), c4(v4), thresh(v5) {};
+	vec4 c1;
+	vec4 c2;
+	vec4 c3;
+	vec4 c4;
+	vec3 thresh;
+
+	void printNode() {
+		printf("%f, %f, %f, %f\n", c1[0], c1[1], c1[2],c1[3]); 
+		printf("%f, %f, %f, %f\n", c2[0], c2[1], c2[2],c2[3]); 
+		printf("%f, %f, %f, %f\n", c3[0], c3[1], c3[2],c3[3]); 
+		printf("%f, %f, %f, %f\n", c4[0], c4[1], c4[2],c4[3]); 
+	}
+};
+
+struct CelMat {
+	vector<CelMatNode*> cel_mats = {};
+	int currCelMatsIndex = 0;
+
+	void addNode(CelMatNode* node) { cel_mats.push_back(node); }
+
+	void nextCelMat() {
+		currCelMatsIndex = (currCelMatsIndex + 1 >= cel_mats.size()) ? 0 : currCelMatsIndex + 1;
+	}
+	void prevCelMat() { 
+		currCelMatsIndex = (currCelMatsIndex - 1 < 0) ? cel_mats.size() - 1 : currCelMatsIndex - 1;
+	}
+
+	void printAll() {
+		for (int i =0; i < cel_mats.size(); ++i) {
+			cel_mats.at(i)->printNode();
+		}
+	}
+};
+
 struct InputManager {
+	enum Mode {
+		Phong, Silhouette, Cel, LAST
+	};
 	Material* mats;
 	Light* lights;
-	bool isPhong = true;
+	CelMat* celMats;
+	Mode mode = Mode::Phong;
+	void nextMode() {
+		if (mode == Mode::Phong) {
+			mode = Silhouette;
+		}
+		else if (mode == Mode::Silhouette) {
+			mode = Cel;
+		}
+		else if (mode == Mode::Cel) {
+			mode = Phong;
+		}
+	}
+	void prevMode() {
+		if (mode == Mode::Phong) {
+			mode = Cel;
+		}
+		else if (mode == Mode::Silhouette) {
+			mode = Phong;
+		}
+		else if (mode == Mode::Cel) {
+			mode = Silhouette;
+		}
+	}
+
 };
+
+
 
 GLFWwindow *window; // Main application window
 string RESOURCE_DIR = "./"; // Where the resources are loaded from
@@ -35,6 +104,7 @@ string RESOURCE_DIR = "./"; // Where the resources are loaded from
 shared_ptr<Camera> camera;
 shared_ptr<Program> prog;
 shared_ptr<Program> prog_sil;
+shared_ptr<Program> prog_cel;
 shared_ptr<Shape> shape;
 
 int KEY_M_MAIN = 77;
@@ -60,15 +130,26 @@ static void key_callback(GLFWwindow *window, int key, int scancode, int action, 
 	InputManager * inputManager = reinterpret_cast<InputManager *>(glfwGetWindowUserPointer(window));
 
 
-	if (key == KEY_M_MAIN) {
+	if ((key == KEY_M_MAIN) && inputManager->mode == InputManager::Mode::Phong) {
 		inputManager->mats->handleKey(key, mods);
 	}
-	else if (key == KEY_L_MAIN || key == KEY_X_MAIN || key == KEY_Y_MAIN) {
+	else if ((key == KEY_L_MAIN || key == KEY_X_MAIN || key == KEY_Y_MAIN) && inputManager->mode == InputManager::Mode::Phong) {
 		inputManager->lights->handleKey(key, mods);
 	}
-	else if (key == KEY_S_MAIN && action == 1) {
-		inputManager->isPhong = !inputManager->isPhong;
+	else if (key == KEY_S_MAIN && action == 1 && mods == 0) {
+		inputManager->nextMode();
 	}
+	else if (key == KEY_S_MAIN && action == 1 && mods == 1) {
+		inputManager->prevMode();
+	}
+	else if (key == KEY_M_MAIN && action == 1 && mods == 0 && inputManager->mode == InputManager::Mode::Cel) {
+		inputManager->celMats->nextCelMat();
+	}
+		else if (key == KEY_M_MAIN && action == 1 && mods == 1 && inputManager->mode == InputManager::Mode::Cel) {
+		inputManager->celMats->prevCelMat();
+	}
+ 
+
 
 
 	if(key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
@@ -135,6 +216,23 @@ static void init(string objFile)
 	prog_sil->addUniform("P");
 	prog_sil->setVerbose(false);
 
+
+	prog_cel = make_shared<Program>();
+	prog_cel->setShaderNames(RESOURCE_DIR + "cel_vert.glsl", RESOURCE_DIR + "cel_frag.glsl");
+	prog_cel->setVerbose(true);
+	prog_cel->init();
+	prog_cel->addAttribute("aPos");
+	prog_cel->addAttribute("aNor");
+	prog_cel->addUniform("MV");
+	prog_cel->addUniform("P");
+	prog_cel->addUniform("c1");
+	prog_cel->addUniform("c2");
+	prog_cel->addUniform("c3");
+	prog_cel->addUniform("c4");
+	prog_cel->addUniform("thresh");
+	prog_cel->setVerbose(false);
+
+
 	prog = make_shared<Program>();
 	prog->setShaderNames(RESOURCE_DIR + "vert.glsl", RESOURCE_DIR + "frag.glsl");
 	prog->setVerbose(true);
@@ -196,7 +294,8 @@ static void render(Material* mats, Light* lights, InputManager* inputManager)
 	MV->pushMatrix();
 	camera->applyViewMatrix(MV);
 
-	if (inputManager->isPhong) {
+
+	if (inputManager->mode == InputManager::Mode::Phong) {
 		prog->bind();
 		glUniformMatrix4fv(prog->getUniform("P"), 1, GL_FALSE, glm::value_ptr(P->topMatrix()));
 		glUniformMatrix4fv(prog->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
@@ -219,12 +318,34 @@ static void render(Material* mats, Light* lights, InputManager* inputManager)
 		shape->draw(prog);
 		prog->unbind();
 	}
-	else {
+	else if (inputManager->mode == InputManager::Mode::Silhouette) {
 		prog_sil->bind();
 		glUniformMatrix4fv(prog_sil->getUniform("P"), 1, GL_FALSE, glm::value_ptr(P->topMatrix()));
 		glUniformMatrix4fv(prog_sil->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
 		shape->draw(prog_sil);
 		prog_sil->unbind();
+	}
+	else if (inputManager->mode == InputManager::Mode::Cel) {
+
+		prog_cel->bind();
+		glUniformMatrix4fv(prog_cel->getUniform("P"), 1, GL_FALSE, glm::value_ptr(P->topMatrix()));
+		glUniformMatrix4fv(prog_cel->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
+		CelMatNode* currNode = inputManager->celMats->cel_mats.at(inputManager->celMats->currCelMatsIndex);
+
+		// glUniform4fv(prog->getUniform("c1"), 1, glm::value_ptr(currNode->c1));
+		// glUniform4fv(prog->getUniform("c2"), 1, glm::value_ptr(currNode->c2));
+		// glUniform4fv(prog->getUniform("c3"), 1, glm::value_ptr(currNode->c3));
+		// glUniform4fv(prog->getUniform("c4"), 1, glm::value_ptr(currNode->c4));
+
+		
+		// currNode->printNode();
+		glUniform4f(prog_cel->getUniform("c1"), currNode->c1[0], currNode->c1[1], currNode->c1[2], currNode->c1[3]);
+		glUniform4f(prog_cel->getUniform("c2"), currNode->c2[0], currNode->c2[1], currNode->c2[2], currNode->c2[3]);
+		glUniform4f(prog_cel->getUniform("c3"), currNode->c3[0], currNode->c3[1], currNode->c3[2], currNode->c3[3]);
+		glUniform4f(prog_cel->getUniform("c4"), currNode->c4[0], currNode->c4[1], currNode->c4[2], currNode->c4[3]);
+		glUniform3f(prog_cel->getUniform("thresh"), currNode->thresh[0], currNode->thresh[1], currNode->thresh[2]);
+		shape->draw(prog_cel);
+		prog_cel->unbind();
 	}
 	
 	
@@ -260,6 +381,43 @@ Material* initMaterials() {
 	mats->addMatNode(nGray);
 
 	return mats;
+}
+
+CelMat* initCelMats() {
+	CelMat* c = new CelMat();
+
+	float f1 = 1.0f;
+	float f2 = 0.6f;
+	float f3 = 0.4f;
+	float f4 = 0.2f;
+
+	vec4 c1_1(1.0f, 0.5f, 0.5f, 1.0f);
+	vec4 c1_2(0.6f, 0.3f, 0.3f, 1.0f);
+	vec4 c1_3(0.4f, 0.2f, 0.2f, 1.0f);
+	vec4 c1_4(0.2f, 0.1f, 0.1f, 1.0f);
+	vec3 t1_1(0.95f, 0.60f, 0.25f);
+
+	CelMatNode* node1 = new CelMatNode(c1_1, c1_2, c1_3, c1_4, t1_1);
+
+	vec4 c2_1(f1 / 2.0f, f1, f1 / 2.0f, 1.0f);
+	vec4 c2_2(f2 / 2.0f, f2, f2 / 2.0f, 1.0f);
+	vec4 c2_3(f3 / 2.0f, f3, f3 / 2.0f, 1.0f);
+	vec4 c2_4(f4 / 2.0f, f4, f4 / 2.0f, 1.0f);
+	vec3 t2_1(0.85f, 0.50f, 0.20f);
+	CelMatNode* node2 = new CelMatNode(c2_1, c2_2, c2_3, c2_4, t2_1);
+
+	vec4 c3_1(f1 / 2.0f, f1 / 2.0f, f1, 1.0f);
+	vec4 c3_2(f2 / 2.0f, f2 / 2.0f, f2, 1.0f);
+	vec4 c3_3(f3 / 2.0f, f3 / 2.0f, f3, 1.0f);
+	vec4 c3_4(f4 / 2.0f, f4 / 2.0f, f4, 1.0f);
+	vec3 t3_1(0.7f, 0.25f, 0.15f);
+	CelMatNode* node3 = new CelMatNode(c3_1, c3_2, c3_3, c3_4, t3_1);
+
+	c->addNode(node1);
+	c->addNode(node2);
+	c->addNode(node3);
+	
+	return c;
 }
 
 Light* initLights() {
@@ -339,11 +497,17 @@ int main(int argc, char **argv)
 	Material* mats = initMaterials();
 
 	Light* lights = initLights();
-	lights->printLights();
+
+	CelMat* celMats = initCelMats();
+	
+
 
 	InputManager* inputManager = new InputManager();
 	inputManager->lights = lights;
 	inputManager->mats = mats;
+	inputManager->celMats = celMats;
+
+	
 
 	// Allows access of Materials pointer in key callback
 	glfwSetWindowUserPointer(window, inputManager);
