@@ -23,6 +23,10 @@ void Light::updateCurrent(int pos, int mods) {
 }
 
 void Light::handleKey(int key, int mods) {
+
+
+
+
   if (key == KEY_X) {
     updateCurrent(POS_X, mods);
   }
@@ -30,6 +34,18 @@ void Light::handleKey(int key, int mods) {
     updateCurrent(POS_Y, mods);
   }
   if (key == KEY_L) {
+
+    // Delay switching between lights because it is too fast to 
+    // accurately switch easily. However I personally 
+    // like updating the actual positions quickly so I only 
+    // delay for switching cameras.
+    std::chrono::system_clock::time_point tock = std::chrono::system_clock::now();
+
+    if (delay(tock)) {
+      return;
+    }
+
+    tick = tock;
     if (!mods) { nextLight(); } 
     else { prevLight(); }
   }

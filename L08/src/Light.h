@@ -38,10 +38,10 @@ class Light {
 
   std::chrono::system_clock::time_point tick;
 
-  int DELAY_TIME = 500;
+  int DELAY_TIME = 250;
   int64_t tbuff = std::chrono::milliseconds(DELAY_TIME).count();
 
-  float step_size = 1;
+  float step_size = .5;
 
   bool delay(std::chrono::system_clock::time_point& tock);
 

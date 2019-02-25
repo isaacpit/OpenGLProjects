@@ -26,6 +26,7 @@ using namespace std;
 struct InputManager {
 	Material* mats;
 	Light* lights;
+	bool isPhong = true;
 };
 
 GLFWwindow *window; // Main application window
@@ -33,12 +34,14 @@ string RESOURCE_DIR = "./"; // Where the resources are loaded from
 
 shared_ptr<Camera> camera;
 shared_ptr<Program> prog;
+shared_ptr<Program> prog_sil;
 shared_ptr<Shape> shape;
 
 int KEY_M_MAIN = 77;
 int KEY_L_MAIN = 76;
 int KEY_X_MAIN = 88;
 int KEY_Y_MAIN = 89;
+int KEY_S_MAIN = 83;
 // int KEY_M_MAIN = 77;
 
 bool keyToggles[256] = {false}; // only for English keyboards!
@@ -60,8 +63,11 @@ static void key_callback(GLFWwindow *window, int key, int scancode, int action, 
 	if (key == KEY_M_MAIN) {
 		inputManager->mats->handleKey(key, mods);
 	}
-	else if (key == KEY_X_MAIN || key == KEY_X_MAIN || key == KEY_Y_MAIN) {
+	else if (key == KEY_L_MAIN || key == KEY_X_MAIN || key == KEY_Y_MAIN) {
 		inputManager->lights->handleKey(key, mods);
+	}
+	else if (key == KEY_S_MAIN && action == 1) {
+		inputManager->isPhong = !inputManager->isPhong;
 	}
 
 
@@ -119,6 +125,16 @@ static void init(string objFile)
 	// Enable z-buffer test.
 	glEnable(GL_DEPTH_TEST);
 
+	prog_sil = make_shared<Program>();
+	prog_sil->setShaderNames(RESOURCE_DIR + "sil_vert.glsl", RESOURCE_DIR + "sil_frag.glsl");
+	prog_sil->setVerbose(true);
+	prog_sil->init();
+	prog_sil->addAttribute("aPos");
+	prog_sil->addAttribute("aNor");
+	prog_sil->addUniform("MV");
+	prog_sil->addUniform("P");
+	prog_sil->setVerbose(false);
+
 	prog = make_shared<Program>();
 	prog->setShaderNames(RESOURCE_DIR + "vert.glsl", RESOURCE_DIR + "frag.glsl");
 	prog->setVerbose(true);
@@ -129,6 +145,9 @@ static void init(string objFile)
 	prog->addUniform("P");
 	prog->addUniform("lightPos1");
 	prog->addUniform("lightPos2");
+	prog->addUniform("intensity1");
+	prog->addUniform("intensity2");
+	
 	prog->addUniform("ka");
 	prog->addUniform("kd");
 	prog->addUniform("ks");
@@ -147,7 +166,7 @@ static void init(string objFile)
 }
 
 // This function is called every frame to draw the scene.
-static void render(Material* mats, Light* lights)
+static void render(Material* mats, Light* lights, InputManager* inputManager)
 {
 	// Clear framebuffer.
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -156,11 +175,11 @@ static void render(Material* mats, Light* lights)
 	} else {
 		glDisable(GL_CULL_FACE);
 	}
-	if(keyToggles[(unsigned)'l']) {
-		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-	} else {
-		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-	}
+	// if(keyToggles[(unsigned)'l']) {
+	// 	glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+	// } else {
+	// 	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+	// }
 	
 	// Get current frame buffer size.
 	int width, height;
@@ -176,32 +195,38 @@ static void render(Material* mats, Light* lights)
 	camera->applyProjectionMatrix(P);
 	MV->pushMatrix();
 	camera->applyViewMatrix(MV);
+
+	if (inputManager->isPhong) {
+		prog->bind();
+		glUniformMatrix4fv(prog->getUniform("P"), 1, GL_FALSE, glm::value_ptr(P->topMatrix()));
+		glUniformMatrix4fv(prog->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
+		glUniform3f(prog->getUniform("lightPos1"), lights->lights[0]->pos.x, lights->lights[0]->pos.y, lights->lights[0]->pos.z);
+		glUniform3f(prog->getUniform("lightPos2"), lights->lights[1]->pos.x, lights->lights[1]->pos.y, lights->lights[1]->pos.z);
+		glUniform1f(prog->getUniform("intensity1"), lights->lights[0]->intensity);
+		glUniform1f(prog->getUniform("intensity2"), lights->lights[1]->intensity);
+
+		MatNode* currMat = mats->getCurrMat();
+		vec3 currKa  = currMat->ka;
+		vec3 currKd  = currMat->kd;
+		vec3 currKs  = currMat->ks;
+		float currS = currMat->s;
+
+		glUniform3f(prog->getUniform("ka"), currKa.x, currKa.y, currKa.z);
+		glUniform3f(prog->getUniform("kd"), currKd.x, currKd.y, currKd.z);
+		glUniform3f(prog->getUniform("ks"), currKs.x, currKs.y, currKs.z);
+		glUniform1f(prog->getUniform("s"), currS);
+
+		shape->draw(prog);
+		prog->unbind();
+	}
+	else {
+		prog_sil->bind();
+		glUniformMatrix4fv(prog_sil->getUniform("P"), 1, GL_FALSE, glm::value_ptr(P->topMatrix()));
+		glUniformMatrix4fv(prog_sil->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
+		shape->draw(prog_sil);
+		prog_sil->unbind();
+	}
 	
-	prog->bind();
-	glUniformMatrix4fv(prog->getUniform("P"), 1, GL_FALSE, glm::value_ptr(P->topMatrix()));
-	glUniformMatrix4fv(prog->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
-	glUniform3f(prog->getUniform("lightPos1"), lights->lights[0]->pos.x, lights->lights[0]->pos.y, lights->lights[0]->pos.z);
-	glUniform3f(prog->getUniform("lightPos2"), lights->lights[1]->pos.x, lights->lights[1]->pos.y, lights->lights[1]->pos.z);
-	// glUniform3f(prog->getUniform("lightPos2"), 1.0f, 1.0f, 1.0f);
-	// glUniform3f(prog->getUniform("lightPos"), 1.0f, 1.0f, 1.0f);
-	// glUniform3f(prog->getUniform("ka"), 0.2f, 0.2f, 0.2f);
-	// glUniform3f(prog->getUniform("kd"), 0.8f, 0.7f, 0.7f);
-	// glUniform3f(prog->getUniform("ks"), 1.0f, 0.9f, 0.8f);
-	// glUniform1f(prog->getUniform("s"), 200.0f);
-
-	MatNode* currMat = mats->getCurrMat();
-	vec3 currKa  = currMat->ka;
-	vec3 currKd  = currMat->kd;
-	vec3 currKs  = currMat->ks;
-	float currS = currMat->s;
-
-	glUniform3f(prog->getUniform("ka"), currKa.x, currKa.y, currKa.z);
-	glUniform3f(prog->getUniform("kd"), currKd.x, currKd.y, currKd.z);
-	glUniform3f(prog->getUniform("ks"), currKs.x, currKs.y, currKs.z);
-	glUniform1f(prog->getUniform("s"), currS);
-
-	shape->draw(prog);
-	prog->unbind();
 	
 	MV->popMatrix();
 	P->popMatrix();
@@ -326,7 +351,7 @@ int main(int argc, char **argv)
 	// Loop until the user closes the window.
 	while(!glfwWindowShouldClose(window)) {
 		// Render scene.
-		render(mats, lights);
+		render(mats, lights, inputManager);
 		// Swap front and back buffers.
 		glfwSwapBuffers(window);
 		// Poll for and process events.
