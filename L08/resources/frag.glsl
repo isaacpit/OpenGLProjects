@@ -2,7 +2,9 @@
 
 uniform mat4 MV;
 
-uniform vec3 lightPos;
+// uniform vec3 lightPos;
+uniform vec3 lightPos1;
+uniform vec3 lightPos2; 
 uniform vec3 ka;
 uniform vec3 kd;
 uniform vec3 ks;

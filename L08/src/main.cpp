@@ -18,7 +18,15 @@
 #include "Program.h"
 #include "Shape.h"
 
+#include "Material.h"
+#include "Light.h"
+
 using namespace std;
+
+struct InputManager {
+	Material* mats;
+	Light* lights;
+};
 
 GLFWwindow *window; // Main application window
 string RESOURCE_DIR = "./"; // Where the resources are loaded from
@@ -26,6 +34,12 @@ string RESOURCE_DIR = "./"; // Where the resources are loaded from
 shared_ptr<Camera> camera;
 shared_ptr<Program> prog;
 shared_ptr<Shape> shape;
+
+int KEY_M_MAIN = 77;
+int KEY_L_MAIN = 76;
+int KEY_X_MAIN = 88;
+int KEY_Y_MAIN = 89;
+// int KEY_M_MAIN = 77;
 
 bool keyToggles[256] = {false}; // only for English keyboards!
 
@@ -38,9 +52,23 @@ static void error_callback(int error, const char *description)
 // This function is called when a key is pressed
 static void key_callback(GLFWwindow *window, int key, int scancode, int action, int mods)
 {
+	// printf("key: %d | scancode: %d |  action: %d | mods: %d\n", key, scancode, action, mods);
+
+	InputManager * inputManager = reinterpret_cast<InputManager *>(glfwGetWindowUserPointer(window));
+
+
+	if (key == KEY_M_MAIN) {
+		inputManager->mats->handleKey(key, mods);
+	}
+	else if (key == KEY_X_MAIN || key == KEY_X_MAIN || key == KEY_Y_MAIN) {
+		inputManager->lights->handleKey(key, mods);
+	}
+
+
 	if(key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
 		glfwSetWindowShouldClose(window, GL_TRUE);
 	}
+
 }
 
 // This function is called when the mouse is clicked
@@ -81,7 +109,7 @@ static void resize_callback(GLFWwindow *window, int width, int height)
 }
 
 // This function is called once to initialize the scene and OpenGL
-static void init()
+static void init(string objFile)
 {
 	// Initialize time.
 	glfwSetTime(0.0);
@@ -99,7 +127,8 @@ static void init()
 	prog->addAttribute("aNor");
 	prog->addUniform("MV");
 	prog->addUniform("P");
-	prog->addUniform("lightPos");
+	prog->addUniform("lightPos1");
+	prog->addUniform("lightPos2");
 	prog->addUniform("ka");
 	prog->addUniform("kd");
 	prog->addUniform("ks");
@@ -110,7 +139,7 @@ static void init()
 	camera->setInitDistance(2.0f);
 	
 	shape = make_shared<Shape>();
-	shape->loadMesh(RESOURCE_DIR + "bunny.obj");
+	shape->loadMesh(RESOURCE_DIR + objFile);
 	shape->fitToUnitBox();
 	shape->init();
 	
@@ -118,7 +147,7 @@ static void init()
 }
 
 // This function is called every frame to draw the scene.
-static void render()
+static void render(Material* mats, Light* lights)
 {
 	// Clear framebuffer.
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -151,11 +180,26 @@ static void render()
 	prog->bind();
 	glUniformMatrix4fv(prog->getUniform("P"), 1, GL_FALSE, glm::value_ptr(P->topMatrix()));
 	glUniformMatrix4fv(prog->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
-	glUniform3f(prog->getUniform("lightPos"), 1.0f, 1.0f, 1.0f);
-	glUniform3f(prog->getUniform("ka"), 0.2f, 0.2f, 0.2f);
-	glUniform3f(prog->getUniform("kd"), 0.8f, 0.7f, 0.7f);
-	glUniform3f(prog->getUniform("ks"), 1.0f, 0.9f, 0.8f);
-	glUniform1f(prog->getUniform("s"), 200.0f);
+	glUniform3f(prog->getUniform("lightPos1"), lights->lights[0]->pos.x, lights->lights[0]->pos.y, lights->lights[0]->pos.z);
+	glUniform3f(prog->getUniform("lightPos2"), lights->lights[1]->pos.x, lights->lights[1]->pos.y, lights->lights[1]->pos.z);
+	// glUniform3f(prog->getUniform("lightPos2"), 1.0f, 1.0f, 1.0f);
+	// glUniform3f(prog->getUniform("lightPos"), 1.0f, 1.0f, 1.0f);
+	// glUniform3f(prog->getUniform("ka"), 0.2f, 0.2f, 0.2f);
+	// glUniform3f(prog->getUniform("kd"), 0.8f, 0.7f, 0.7f);
+	// glUniform3f(prog->getUniform("ks"), 1.0f, 0.9f, 0.8f);
+	// glUniform1f(prog->getUniform("s"), 200.0f);
+
+	MatNode* currMat = mats->getCurrMat();
+	vec3 currKa  = currMat->ka;
+	vec3 currKd  = currMat->kd;
+	vec3 currKs  = currMat->ks;
+	float currS = currMat->s;
+
+	glUniform3f(prog->getUniform("ka"), currKa.x, currKa.y, currKa.z);
+	glUniform3f(prog->getUniform("kd"), currKd.x, currKd.y, currKd.z);
+	glUniform3f(prog->getUniform("ks"), currKs.x, currKs.y, currKs.z);
+	glUniform1f(prog->getUniform("s"), currS);
+
 	shape->draw(prog);
 	prog->unbind();
 	
@@ -165,6 +209,52 @@ static void render()
 	GLSL::checkError(GET_FILE_LINE);
 }
 
+Material* initMaterials() {
+	Material* mats = new Material();
+
+	vec3 nWhite_ka(0.2f, 0.2f, 0.2f);
+	vec3 nWhite_kd(0.8f, 0.7f, 0.7f);
+	vec3 nWhite_ks(1.0f, 0.9f, 0.8f);
+	float nWhite_s = 200.0f;
+	MatNode* nWhite = new MatNode(nWhite_ka, nWhite_kd, nWhite_ks, nWhite_s);
+
+	vec3 nBlue_ka(0.0f, 0.2f, 0.0f);
+	vec3 nBlue_kd(0.05f, 0.1f, 1.0f);
+	vec3 nBlue_ks(1.0f, 0.9f, 0.8f);
+	float nBlue_s = 200.0f;
+	MatNode* nBlue = new MatNode(nBlue_ka, nBlue_kd, nBlue_ks, nBlue_s);
+
+	vec3 nGray_ka(0.1f, 0.1f, 0.f);
+	vec3 nGray_kd(0.3f, 0.3f, 0.5f);
+	vec3 nGray_ks(0.1f, 0.1f, 0.25f);
+	float nGray_s = 25.0f;
+	MatNode* nGray = new MatNode(nGray_ka, nGray_kd, nGray_ks, nGray_s);
+
+	mats->addMatNode(nWhite);
+	mats->addMatNode(nBlue);
+	mats->addMatNode(nGray);
+
+	return mats;
+}
+
+Light* initLights() {
+	Light* lights = new Light();
+
+	vec3 light1_vec = vec3(1.0f, 1.0f, 1.0f);
+	float light1_intensity = 0.8f;
+	LightNode* light1 = new LightNode(light1_vec, light1_intensity);
+
+	vec3 light2_vec = vec3(-1.0f, 1.0f, 1.0f);
+	float light2_intensity = 0.2f;
+	LightNode* light2 = new LightNode(light2_vec, light2_intensity);
+
+	lights->addLightNode(light1);
+	lights->addLightNode(light2);
+
+	return lights;
+
+}
+
 int main(int argc, char **argv)
 {
 	if(argc < 2) {
@@ -172,6 +262,15 @@ int main(int argc, char **argv)
 		return 0;
 	}
 	RESOURCE_DIR = argv[1] + string("/");
+
+	string objFile = "";
+	if (argc < 3) {
+		cout << "Selecting the bunny.obj by default" << endl;
+		objFile = "bunny.obj";
+	}
+	else {
+		objFile = argv[2];
+	}
 
 	// Set error callback.
 	glfwSetErrorCallback(error_callback);
@@ -210,11 +309,24 @@ int main(int argc, char **argv)
 	// Set the window resize call back.
 	glfwSetFramebufferSizeCallback(window, resize_callback);
 	// Initialize scene.
-	init();
+	init(objFile);
+	// Initialize materials.
+	Material* mats = initMaterials();
+
+	Light* lights = initLights();
+	lights->printLights();
+
+	InputManager* inputManager = new InputManager();
+	inputManager->lights = lights;
+	inputManager->mats = mats;
+
+	// Allows access of Materials pointer in key callback
+	glfwSetWindowUserPointer(window, inputManager);
+
 	// Loop until the user closes the window.
 	while(!glfwWindowShouldClose(window)) {
 		// Render scene.
-		render();
+		render(mats, lights);
 		// Swap front and back buffers.
 		glfwSwapBuffers(window);
 		// Poll for and process events.
