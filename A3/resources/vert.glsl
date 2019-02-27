@@ -30,11 +30,6 @@ void main()
 	normal = vec4(aNor.x, aNor.y, aNor.z, 0.0);
 	normal = MV * normal;
 	
-	// already in camera space
-	lightPos_camera = vec4(lightPos.x, lightPos.y, lightPos.z, 1.0);
-	lightPos_camera1 = vec4(lightPos1.x, lightPos1.y, lightPos1.z, 1.0);
-	lightPos_camera2 = vec4(lightPos2.x, lightPos2.y, lightPos2.z, 1.0);
-	
 	fragPos_camera = vec4(aPos.x, aPos.y, aPos.z, 1.0);
 	fragPos_camera = MV * fragPos_camera;
 
