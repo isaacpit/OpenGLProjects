@@ -182,6 +182,8 @@ shared_ptr<Program> prog_sil;
 shared_ptr<Program> prog_cel;
 shared_ptr<Shape> shape;
 shared_ptr<Shape> shape1;
+shared_ptr<Shape> shapeSun;
+shared_ptr<Shape> shapeGround;
 
 int KEY_M_MAIN = 77;
 int KEY_L_MAIN = 76;
@@ -271,6 +273,43 @@ static void resize_callback(GLFWwindow *window, int width, int height)
 	glViewport(0, 0, width, height);
 }
 
+void drawSun(shared_ptr<MatrixStack> P, shared_ptr<MatrixStack> MV, Light* lights, Material* mats) {
+	MV->pushMatrix();
+	// CAREFUL I PUT A NEGATIVE ON THE X DIRECTION BC IT SEEMED TO NOT FOLLOW CORRECTLY
+	MV->translate(-lights->lights[0]->pos.x, lights->lights[0]->pos.y, lights->lights[0]->pos.z);
+
+	glUniformMatrix4fv(prog->getUniform("P"), 1, GL_FALSE, glm::value_ptr(P->topMatrix()));
+	glUniformMatrix4fv(prog->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
+	glUniform3f(prog->getUniform("lightPos1"), lights->lights[0]->pos.x, lights->lights[0]->pos.y, lights->lights[0]->pos.z);
+	glUniform3f(prog->getUniform("lightPos2"), lights->lights[1]->pos.x, lights->lights[1]->pos.y, lights->lights[1]->pos.z);
+	glUniform1f(prog->getUniform("intensity1"), lights->lights[0]->intensity);
+	glUniform1f(prog->getUniform("intensity2"), lights->lights[1]->intensity);
+
+	MatNode* currMat = mats->getCurrMat();
+	vec3 currKa  = currMat->ka;
+	vec3 currKd  = currMat->kd;
+	vec3 currKs  = currMat->ks;
+	float currS = currMat->s;
+
+	glUniform3f(prog->getUniform("ka"), currKa.x, currKa.y, currKa.z);
+	glUniform3f(prog->getUniform("kd"), 1.0f, 1.0f, 0.0f);
+	glUniform3f(prog->getUniform("ks"), 0.0f, 0.0f, 0.0f);
+	glUniform1f(prog->getUniform("s"), currS);
+
+	shapeSun->draw(prog);
+
+	MV->popMatrix();
+}
+
+void drawGround(shared_ptr<MatrixStack> P, shared_ptr<MatrixStack> MV, Light* lights, Material* mats) {
+	MV->pushMatrix();
+	MV->translate(0, -.05, 0);
+	MV->scale(10, .05, 10);
+
+
+	MV->popMatrix();
+}
+
 // This function is called once to initialize the scene and OpenGL
 static void init(string objFile[])
 {
@@ -343,6 +382,15 @@ static void init(string objFile[])
 	shape1->fitToUnitBox();
 	shape1->init();
 
+	shapeSun = make_shared<Shape>();
+	shapeSun->loadMesh(RESOURCE_DIR + "sphere.obj");
+	shapeSun->fitToUnitBox();
+	shapeSun->init();
+
+	shapeGround = make_shared<Shape>();
+	shapeGround->loadMesh(RESOURCE_DIR + "cube.obj");
+	shapeGround->fitToUnitBox();
+	shapeGround->init();
 
 	
 	GLSL::checkError(GET_FILE_LINE);
@@ -408,6 +456,9 @@ static void render(Material* mats, Light* lights, InputManager* inputManager)
 
 		prog->bind();
 
+		drawSun(P, MV, lights, mats);
+		drawGround(P, MV, lights, mats);
+
 		for (int i = 0; i < im->coords->r; ++i) {
 			for (int j = 0; j < im->coords->c; ++j) {
 				MV->pushMatrix();
@@ -431,18 +482,6 @@ static void render(Material* mats, Light* lights, InputManager* inputManager)
 				glUniform3f(prog->getUniform("ks"), im->coords->ks[i][j].x, im->coords->ks[i][j].y, im->coords->ks[i][j].z);
 				glUniform1f(prog->getUniform("s"), currS);
 
-
-				// MV->translate(0, 0, 10);
-				// shape->draw(prog);
-				// for (int i = 0; i < im->coords->r; ++i) {
-				// 	for (int j = 0; j < im->coords->c; ++j) {
-				// 		// printf("(%.2f, %.2f) ", im->coords->worldSpaceX[i][j], im->coords->worldSpaceZ[i][j]);
-				// 		MV->pushMatrix();
-				// 		MV->translate(vec3(0, 0, im->coords->worldSpaceZ[i][j]));
-				// 		shape->draw(prog);
-				// 		MV->popMatrix();
-				// 	}
-				// }
 				if (int(im->coords->whichShape[i][j]) == 1) {
 					shape->draw(prog);
 				}
@@ -453,64 +492,6 @@ static void render(Material* mats, Light* lights, InputManager* inputManager)
 				MV->popMatrix();
 			}
 		}
-		// glUniformMatrix4fv(prog->getUniform("P"), 1, GL_FALSE, glm::value_ptr(P->topMatrix()));
-		// glUniformMatrix4fv(prog->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
-		// glUniform3f(prog->getUniform("lightPos1"), lights->lights[0]->pos.x, lights->lights[0]->pos.y, lights->lights[0]->pos.z);
-		// glUniform3f(prog->getUniform("lightPos2"), lights->lights[1]->pos.x, lights->lights[1]->pos.y, lights->lights[1]->pos.z);
-		// glUniform1f(prog->getUniform("intensity1"), lights->lights[0]->intensity);
-		// glUniform1f(prog->getUniform("intensity2"), lights->lights[1]->intensity);
-
-		// MatNode* currMat = mats->getCurrMat();
-		// vec3 currKa  = currMat->ka;
-		// vec3 currKd  = currMat->kd;
-		// vec3 currKs  = currMat->ks;
-		// float currS = currMat->s;
-
-		// glUniform3f(prog->getUniform("ka"), currKa.x, currKa.y, currKa.z);
-		// glUniform3f(prog->getUniform("kd"), currKd.x, currKd.y, currKd.z);
-		// glUniform3f(prog->getUniform("ks"), currKs.x, currKs.y, currKs.z);
-		// glUniform1f(prog->getUniform("s"), currS);
-
-
-		// // MV->translate(0, 0, 10);
-		// // shape->draw(prog);
-		// // for (int i = 0; i < im->coords->r; ++i) {
-		// // 	for (int j = 0; j < im->coords->c; ++j) {
-		// // 		// printf("(%.2f, %.2f) ", im->coords->worldSpaceX[i][j], im->coords->worldSpaceZ[i][j]);
-		// // 		MV->pushMatrix();
-		// // 		MV->translate(vec3(0, 0, im->coords->worldSpaceZ[i][j]));
-		// // 		shape->draw(prog);
-		// // 		MV->popMatrix();
-		// // 	}
-		// // }
-
-		// shape->draw(prog);
-
-		//**************************
-
-		// MV->translate(8, 0, -8);
-
-		// glUniformMatrix4fv(prog->getUniform("P"), 1, GL_FALSE, glm::value_ptr(P->topMatrix()));
-		// glUniformMatrix4fv(prog->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
-		// glUniform3f(prog->getUniform("lightPos1"), lights->lights[0]->pos.x, lights->lights[0]->pos.y, lights->lights[0]->pos.z);
-		// glUniform3f(prog->getUniform("lightPos2"), lights->lights[1]->pos.x, lights->lights[1]->pos.y, lights->lights[1]->pos.z);
-		// glUniform1f(prog->getUniform("intensity1"), lights->lights[0]->intensity);
-		// glUniform1f(prog->getUniform("intensity2"), lights->lights[1]->intensity);
-
-		// // currMat = mats->getCurrMat();
-		// // currKa  = currMat->ka;
-		// // currKd  = currMat->kd;
-		// // currKs  = currMat->ks;
-		// // currS = currMat->s;
-
-		// glUniform3f(prog->getUniform("ka"), currKa.x, currKa.y, currKa.z);
-		// glUniform3f(prog->getUniform("kd"), currKd.x, currKd.y, currKd.z);
-		// glUniform3f(prog->getUniform("ks"), currKs.x, currKs.y, currKs.z);
-		// glUniform1f(prog->getUniform("s"), currS);
-
-		// shape->draw(prog);
-
-		//**************************
 
 		prog->unbind();
 
@@ -623,7 +604,7 @@ CelMat* initCelMats() {
 Light* initLights() {
 	Light* lights = new Light();
 
-	vec3 light1_vec = vec3(1.0f, 1.0f, 1.0f);
+	vec3 light1_vec = vec3(10.0f, 10.0f, 1.0f);
 	float light1_intensity = 0.8f;
 	LightNode* light1 = new LightNode(light1_vec, light1_intensity);
 

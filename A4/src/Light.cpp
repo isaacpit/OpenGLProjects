@@ -15,10 +15,11 @@ LightNode* Light::getCurrLight() {
 
 void Light::updateCurrent(int pos, int mods) {
   LightNode* curr = lights.at(currLightIndex);
-  // printf("(%f, %f, %f) BEFORE\n", curr->pos.x, curr->pos.y, curr->pos.z);
+  printf("(%f, %f, %f) BEFORE\n", curr->pos.x, curr->pos.y, curr->pos.z);
 
   curr->pos[pos] = (mods) ? curr->pos[pos] - step_size : curr->pos[pos] + step_size;
-  // printf("(%f, %f, %f) NEW POS  BEFORE \n", newPos.x, newPos.y, newPos.z);
+  
+  printf("(%f, %f, %f) NEW POS  BEFORE \n", curr->pos.x, curr->pos.y, curr->pos.z);
 
 }
 
