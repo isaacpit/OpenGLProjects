@@ -46,7 +46,8 @@ void main()
 	vec3 c_1 = intensity1 * (ka + cd1 + cs1);
 	vec3 c_2 = intensity2 * (ka + cd2 + cs2);
 
-	vec3 c = c_1 + c_2;
+	// vec3 c = c_1 + c_2; 
+	vec3 c = c_1;
 
 	gl_FragColor = vec4(c, 1.0);
 }
