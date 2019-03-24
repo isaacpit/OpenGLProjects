@@ -26,8 +26,6 @@ void Light::updateCurrent(int pos, int mods) {
 void Light::handleKey(int key, int mods) {
 
 
-
-
   if (key == KEY_X) {
     updateCurrent(POS_X, mods);
   }

@@ -14,7 +14,8 @@ Camera::Camera() :
 	translations(0.0f, 0.0f, -5.0f),
 	rfactor(0.01f),
 	tfactor(0.001f),
-	sfactor(0.005f)
+	sfactor(0.005f),
+	position(0.0f, 0.0f, 0.0f)
 {
 }
 
@@ -24,6 +25,7 @@ Camera::~Camera()
 
 void Camera::mouseClicked(float x, float y, bool shift, bool ctrl, bool alt)
 {
+	printf("mouse: (%f, %f)\n", x, y);
 	mousePrev.x = x;
 	mousePrev.y = y;
 	if(shift) {
@@ -42,6 +44,12 @@ void Camera::mouseMoved(float x, float y)
 	switch(state) {
 		case Camera::ROTATE:
 			rotations += rfactor * dv;
+			if (rotations.y < -MAX_PITCH) {
+				rotations.y = -MAX_PITCH;
+			}
+			else if (rotations.y > MAX_PITCH) {
+				rotations.y = MAX_PITCH;
+			}
 			break;
 		case Camera::TRANSLATE:
 			translations.x -= translations.z * tfactor * dv.x;
@@ -52,6 +60,33 @@ void Camera::mouseMoved(float x, float y)
 			break;
 	}
 	mousePrev = mouseCurr;
+
+	// std::cout << "(" << rotations.x <<  ", " << rotations.y << ")" <<  std::endl;
+}
+
+void Camera::keyPressed(int key, int mods) {
+	// FIXME
+	vec3 F_yaw = normalize(vec3(sin(rotations.x), 0, cos(rotations.x)));
+	// printf("F: (%f, %f, %f)", F_yaw.x, F_yaw.y, F_yaw.z);
+	vec3 R_yaw = normalize(cross(vec3(0, 1, 0), F_yaw));
+
+	if (key == KEY_W_MAIN) {
+		// position.x += cos(rotations.x);
+		// position.y += rotations.y;
+		// position.x -= STEP_SIZE;
+		position = vec3(position.x - F_yaw.x * STEP_SIZE, position.y + F_yaw.y * STEP_SIZE, position.z + F_yaw.z * STEP_SIZE);
+	}
+	else if (key == KEY_S_MAIN) {
+		// position.x += STEP_SIZE;
+		position = vec3(position.x + F_yaw.x * STEP_SIZE, position.y + F_yaw.y * STEP_SIZE, position.z - F_yaw.z * STEP_SIZE);
+	}
+	else if (key == KEY_A_MAIN) {
+		position = vec3(position.x + R_yaw.x * STEP_SIZE, position.y + R_yaw.y * STEP_SIZE, position.z - R_yaw.z * STEP_SIZE);
+	}
+	else if (key == KEY_D_MAIN) {
+		position = vec3(position.x - R_yaw.x * STEP_SIZE, position.y + R_yaw.y * STEP_SIZE, position.z + R_yaw.z * STEP_SIZE);
+	}
+	// printf("(%f, %f, %f)\n", position.x, position.y, position.z);
 }
 
 void Camera::applyProjectionMatrix(std::shared_ptr<MatrixStack> P) const
@@ -65,4 +100,14 @@ void Camera::applyViewMatrix(std::shared_ptr<MatrixStack> MV) const
 	MV->translate(translations);
 	MV->rotate(rotations.y, glm::vec3(1.0f, 0.0f, 0.0f));
 	MV->rotate(rotations.x, glm::vec3(0.0f, 1.0f, 0.0f));
+}
+
+void Camera::applyViewMatrixFreeLook(std::shared_ptr<MatrixStack> MV) const
+{
+	// MV->translate(translations);
+	glm::vec2 f = glm::normalize(glm::vec2(cos(rotations.x), sin(rotations.y)));
+
+	MV->rotate(rotations.y, glm::vec3(1.0f, 0.0f, 0.0f));
+	MV->rotate(rotations.x, glm::vec3(0.0f, 1.0f, 0.0f));
+	MV->translate(position);
 }

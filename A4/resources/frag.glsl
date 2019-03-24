@@ -18,17 +18,20 @@ varying vec4 normal;
 
 varying vec4 fragPos_camera;
 
+varying vec4 lightPos_camera;
+
 void main()
 {
 	vec4 n = normalize(normal); // normal in camera space 
 
-	vec4 l1 = normalize(vec4(lightPos1, 1.0) - fragPos_camera);
+	// vec4 l1 = normalize(vec4(lightPos1, 1.0) - fragPos_camera);
+	vec4 l1 = normalize(lightPos_camera - fragPos_camera);
 	vec4 l2 = normalize(vec4(lightPos2, 1.0) - fragPos_camera);
 
 	vec4 camera_c = vec4(0.0, 0.0, 0.0, 1.0);
 	vec4 e = normalize(camera_c - fragPos_camera);
 
-	vec4 h1 = normalize((l1 + e) /2);
+	vec4 h1 = normalize((l1 + e));
 	vec4 h2 = normalize((l2 + e) /2);
 
 	float dot_h1_n = max(0, dot(h1, n));

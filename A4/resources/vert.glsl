@@ -3,7 +3,7 @@
 uniform mat4 P;
 uniform mat4 MV;
 
-uniform vec3 lightPos; 
+// uniform vec3 lightPos; 
 uniform vec3 lightPos1; 
 uniform vec3 lightPos2; 
 uniform vec3 intensity1; 
@@ -22,7 +22,6 @@ varying vec4 lightPos_camera2;
 varying vec4 fragPos_camera;
 
 
-
 void main()
 {
 	gl_Position = P * MV * aPos;
@@ -32,6 +31,8 @@ void main()
 	
 	fragPos_camera = vec4(aPos.x, aPos.y, aPos.z, 1.0);
 	fragPos_camera = MV * fragPos_camera;
+
+	lightPos_camera = MV * vec4(lightPos1, 1.0);
 
 	color = vec3(0.5, 0.5, 0.5);
 }

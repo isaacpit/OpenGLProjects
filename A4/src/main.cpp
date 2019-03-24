@@ -19,6 +19,7 @@
 #include "MatrixStack.h"
 #include "Program.h"
 #include "Shape.h"
+#include "Texture.h"
 
 #include "Material.h"
 #include "Light.h"
@@ -29,16 +30,17 @@ using glm::vec4;
 
 
 struct Coords {
-	int r = 5;
-	int c = 5;
-	int max = 4;
-	int min = - 4;
+	int r = 0;
+	int c = 0;
+	int max = 8;
+	int min = - 8;
 	float** worldSpaceX;
 	float** worldSpaceZ;
 	float** whichShape;
 
 	vector<vector<vec3>> colors;
 	vector<vector<vec3>> ks;
+	vector<vector<vec3>> scales;
 
 	float spacing = 2;
 	// float** worldSpaceZ;
@@ -58,6 +60,7 @@ struct Coords {
 
 		colors = vector<vector<vec3>>(r);
 		ks = vector<vector<vec3>>(r);
+		scales = vector<vector<vec3>>(r);
 
 		for (int i = 0; i < r; ++i) {
 			worldSpaceX[i] = new float[c];
@@ -65,6 +68,7 @@ struct Coords {
 			whichShape[i] = new float[c];
 			colors.at(i) = vector<vec3>(c);
 			ks.at(i) = vector<vec3>(c);
+			scales.at(i) = vector<vec3>(c);
 		}
 		int k = 0;
 		int l = 0;
@@ -80,6 +84,9 @@ struct Coords {
 				float ks_g = ( rand() % (10000-0) )/ 10000.0;
 				float ks_b = ( rand() % (10000-0) )/ 10000.0;
 
+				float scales_x = ( rand() % (1000) + 9000 )/ 10000.0;
+				float scales_y = ( rand() % (1000) + 9000 )/ 10000.0;
+				float scales_z = ( rand() % (1000) + 9000 )/ 10000.0;
 
 
 
@@ -88,8 +95,9 @@ struct Coords {
 				whichShape[k][l] = rand() % 2;
 				colors.at(k).at(l) = vec3(r, g, b);
 				ks.at(k).at(l) = vec3(ks_r, ks_g, ks_b);
+				scales.at(k).at(l) = vec3(scales_x, scales_y, scales_z);
 				
-				printf("%d %d | (%.2f, %.2f, %.2f) [%.2f, %.2f, %.2f] [[%.2f, %.2f, %.2f]] \n", k, l, worldSpaceX[k][l], worldSpaceZ[k][l], whichShape[k][l], colors[k][l].r, colors[k][l].g, colors[k][l].b,  ks[k][l].r, ks[k][l].g, ks[k][l].b);
+				printf("%d %d | (%.2f, %.2f, %.2f) ((%.2f, %.2f, %.2f)) [%.2f, %.2f, %.2f] [[%.2f, %.2f, %.2f]] \n", k, l, worldSpaceX[k][l], worldSpaceZ[k][l], whichShape[k][l], scales[k][l].x, scales[k][l].y, scales[k][l].z, colors[k][l].r, colors[k][l].g, colors[k][l].b,  ks[k][l].r, ks[k][l].g, ks[k][l].b);
 				++l; 
 			} cout << endl;
 			l = 0;
@@ -180,17 +188,26 @@ shared_ptr<Camera> camera;
 shared_ptr<Program> prog;
 shared_ptr<Program> prog_sil;
 shared_ptr<Program> prog_cel;
+shared_ptr<Program> prog_grd;
 shared_ptr<Shape> shape;
 shared_ptr<Shape> shape1;
 shared_ptr<Shape> shapeSun;
 shared_ptr<Shape> shapeGround;
+shared_ptr<Texture> texture0;
+
+glm::mat3 T1;
+
 
 int KEY_M_MAIN = 77;
 int KEY_L_MAIN = 76;
 int KEY_X_MAIN = 88;
 int KEY_Y_MAIN = 89;
+int KEY_W_MAIN = 87;
+int KEY_A_MAIN = 65;
 int KEY_S_MAIN = 83;
-// int KEY_M_MAIN = 77;
+int KEY_D_MAIN = 68;
+
+float SCALE = 0.1;
 
 bool keyToggles[256] = {false}; // only for English keyboards!
 
@@ -211,10 +228,11 @@ static void key_callback(GLFWwindow *window, int key, int scancode, int action, 
 	if ((key == KEY_M_MAIN) && inputManager->mode == InputManager::Mode::Phong) {
 		inputManager->mats->handleKey(key, mods);
 	}
-	else if ((key == KEY_L_MAIN || key == KEY_X_MAIN || key == KEY_Y_MAIN) && inputManager->mode == InputManager::Mode::Phong) {
+	else if ((key == KEY_X_MAIN || key == KEY_Y_MAIN) && inputManager->mode == InputManager::Mode::Phong) {
+	// else if ((key == KEY_L_MAIN || key == KEY_X_MAIN || key == KEY_Y_MAIN) && inputManager->mode == InputManager::Mode::Phong) {
 		inputManager->lights->handleKey(key, mods);
 	}
-	else if (key == KEY_S_MAIN && action == 1 && mods == 0) {
+	else if (key == KEY_L_MAIN && action == 1 && mods == 0) {
 		inputManager->nextMode();
 	}
 	else if (key == KEY_S_MAIN && action == 1 && mods == 1) {
@@ -227,6 +245,9 @@ static void key_callback(GLFWwindow *window, int key, int scancode, int action, 
 		inputManager->celMats->prevCelMat();
 	}
  
+	if (key == KEY_W_MAIN || key == KEY_A_MAIN || key == KEY_S_MAIN || key == KEY_D_MAIN) {
+		camera->keyPressed(key, mods);
+	}
 
 
 
@@ -274,9 +295,84 @@ static void resize_callback(GLFWwindow *window, int width, int height)
 }
 
 void drawSun(shared_ptr<MatrixStack> P, shared_ptr<MatrixStack> MV, Light* lights, Material* mats) {
+	prog->bind();
 	MV->pushMatrix();
 	// CAREFUL I PUT A NEGATIVE ON THE X DIRECTION BC IT SEEMED TO NOT FOLLOW CORRECTLY
-	MV->translate(-lights->lights[0]->pos.x, lights->lights[0]->pos.y, lights->lights[0]->pos.z);
+	MV->translate(lights->lights[0]->pos.x, lights->lights[0]->pos.y, lights->lights[0]->pos.z);
+
+
+	glUniformMatrix4fv(prog->getUniform("P"), 1, GL_FALSE, glm::value_ptr(P->topMatrix()));
+	glUniformMatrix4fv(prog->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
+	glUniform3f(prog->getUniform("lightPos1"), lights->lights[0]->pos.x, lights->lights[0]->pos.y, lights->lights[0]->pos.z);
+	glUniform3f(prog->getUniform("lightPos2"), lights->lights[1]->pos.x, lights->lights[1]->pos.y, lights->lights[1]->pos.z);
+	glUniform1f(prog->getUniform("intensity1"), lights->lights[0]->intensity);
+	glUniform1f(prog->getUniform("intensity2"), lights->lights[1]->intensity);
+
+	MatNode* currMat = mats->getCurrMat();
+	vec3 currKa  = currMat->ka;
+	vec3 currKd  = currMat->kd;
+	vec3 currKs  = currMat->ks;
+	float currS = currMat->s;
+
+	glUniform3f(prog->getUniform("ka"), 1.0f, 1.0f, 0.0f);
+	glUniform3f(prog->getUniform("kd"), 1.0f, 1.0f, 0.0f);
+	glUniform3f(prog->getUniform("ks"), 1.0f, 1.0f, 1.0f);
+	glUniform1f(prog->getUniform("s"), currS);
+
+	shapeSun->draw(prog);
+
+	MV->popMatrix();
+	prog->unbind();
+}
+
+void drawGround(shared_ptr<MatrixStack> P, shared_ptr<MatrixStack> MV, Light* lights, Material* mats) {
+	prog_grd->bind();
+
+	MV->pushMatrix();
+	MV->translate(0, -.5002, 0);
+	MV->scale(200, .001, 200);
+
+	texture0->bind(prog_grd->getUniform("texture0"));
+
+	glUniformMatrix4fv(prog_grd->getUniform("P"), 1, GL_FALSE, glm::value_ptr(P->topMatrix()));
+	glUniformMatrix4fv(prog_grd->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
+
+	glUniform3f(prog_grd->getUniform("lightPos1"), lights->lights[0]->pos.x, lights->lights[0]->pos.y, lights->lights[0]->pos.z);
+	glUniform3f(prog_grd->getUniform("lightPos2"), lights->lights[1]->pos.x, lights->lights[1]->pos.y, lights->lights[1]->pos.z);
+	glUniform1f(prog_grd->getUniform("intensity1"), lights->lights[0]->intensity);
+	glUniform1f(prog_grd->getUniform("intensity2"), lights->lights[1]->intensity);
+
+	glUniformMatrix3fv(prog_grd->getUniform("T1"), 1, GL_FALSE, glm::value_ptr(T1));
+
+	MatNode* currMat = mats->getCurrMat();
+	vec3 currKa  = currMat->ka;
+	vec3 currKd  = currMat->kd;
+	vec3 currKs  = currMat->ks;
+	float currS = currMat->s;
+
+	glUniform3f(prog_grd->getUniform("ka"), currKa.x, currKa.y, currKa.z);
+	glUniform3f(prog_grd->getUniform("kd"), 0.5f, 1.0f, 0.5f);
+	glUniform3f(prog_grd->getUniform("ks"), 0.0f, 0.0f, 0.0f);
+	glUniform1f(prog_grd->getUniform("s"), currS);
+
+	shapeGround->draw(prog_grd);
+
+	// texture0->unbind();
+	prog_grd->unbind();
+
+	MV->popMatrix();
+}
+
+void drawHUD(shared_ptr<MatrixStack> P, shared_ptr<MatrixStack> MV, Light* lights, Material* mats, vec3 t, shared_ptr<Shape> _shape) {
+
+	prog->bind();
+	MV->pushMatrix();
+	// CAREFUL I PUT A NEGATIVE ON THE X DIRECTION BC IT SEEMED TO NOT FOLLOW CORRECTLY
+	MV->translate(t);
+	MV->rotate(.25f, vec3(1, 0, 0)); // correction angle
+	MV->rotate(glfwGetTime(), vec3(0, 1, 0));
+	MV->scale(.025, .025, .025);
+
 
 	glUniformMatrix4fv(prog->getUniform("P"), 1, GL_FALSE, glm::value_ptr(P->topMatrix()));
 	glUniformMatrix4fv(prog->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
@@ -293,25 +389,65 @@ void drawSun(shared_ptr<MatrixStack> P, shared_ptr<MatrixStack> MV, Light* light
 
 	glUniform3f(prog->getUniform("ka"), currKa.x, currKa.y, currKa.z);
 	glUniform3f(prog->getUniform("kd"), 1.0f, 1.0f, 0.0f);
-	glUniform3f(prog->getUniform("ks"), 0.0f, 0.0f, 0.0f);
+	glUniform3f(prog->getUniform("ks"), 0.5f, 0.5f, 0.5f);
 	glUniform1f(prog->getUniform("s"), currS);
 
-	shapeSun->draw(prog);
+
+	_shape->draw(prog);
 
 	MV->popMatrix();
+	prog->unbind();
+
 }
 
-void drawGround(shared_ptr<MatrixStack> P, shared_ptr<MatrixStack> MV, Light* lights, Material* mats) {
-	MV->pushMatrix();
-	MV->translate(0, -.05, 0);
-	MV->scale(10, .05, 10);
+void drawObjects(shared_ptr<MatrixStack> P, shared_ptr<MatrixStack> MV, Light* lights, Material* mats, InputManager* im) {
+	for (int i = 0; i < im->coords->r; ++i) {
+		for (int j = 0; j < im->coords->c; ++j) {
+			MV->pushMatrix();
+			MV->translate(im->coords->worldSpaceX[i][j], 0, im->coords->worldSpaceZ[i][j]);
+			
+			float sY = im->coords->scales[i][j].y + SCALE * sin(glfwGetTime());
+			float sX = im->coords->scales[i][j].x + SCALE * cos(glfwGetTime() + sY);
+
+			float sZ = im->coords->scales[i][j].z + SCALE * cos(glfwGetTime() + sY);
 
 
-	MV->popMatrix();
+			MV->scale(sX, 1.0f, sZ);
+
+			glUniformMatrix4fv(prog->getUniform("P"), 1, GL_FALSE, glm::value_ptr(P->topMatrix()));
+			glUniformMatrix4fv(prog->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
+			glUniform3f(prog->getUniform("lightPos1"), lights->lights[0]->pos.x, lights->lights[0]->pos.y, lights->lights[0]->pos.z);
+			glUniform3f(prog->getUniform("lightPos2"), lights->lights[1]->pos.x, lights->lights[1]->pos.y, lights->lights[1]->pos.z);
+			glUniform1f(prog->getUniform("intensity1"), lights->lights[0]->intensity);
+			glUniform1f(prog->getUniform("intensity2"), lights->lights[1]->intensity);
+
+			MatNode* currMat = mats->getCurrMat();
+			vec3 currKa  = currMat->ka;
+			vec3 currKd  = currMat->kd;
+			vec3 currKs  = currMat->ks;
+			float currS = currMat->s;
+
+			glUniform3f(prog->getUniform("ka"), currKa.x, currKa.y, currKa.z);
+			glUniform3f(prog->getUniform("kd"), im->coords->colors[i][j].x, im->coords->colors[i][j].y, im->coords->colors[i][j].z);
+			glUniform3f(prog->getUniform("ks"), im->coords->ks[i][j].x, im->coords->ks[i][j].y, im->coords->ks[i][j].z);
+			glUniform1f(prog->getUniform("s"), currS);
+
+			if (int(im->coords->whichShape[i][j]) == 1) {
+				shape->draw(prog);
+			}
+			else {
+				shape1->draw(prog);
+			}
+
+			MV->popMatrix();
+		}
+	}
+
+	prog->unbind();
 }
 
 // This function is called once to initialize the scene and OpenGL
-static void init(string objFile[])
+static void init(string objFile[], InputManager* im)
 {
 	cout << "objFile0: " << objFile[0] << endl;
 	cout << "objFile1: " << objFile[1] << endl;
@@ -349,6 +485,31 @@ static void init(string objFile[])
 	prog_cel->addUniform("thresh");
 	prog_cel->setVerbose(false);
 
+	prog_grd = make_shared<Program>();
+	prog_grd->setShaderNames(RESOURCE_DIR + "plane_vert.glsl", RESOURCE_DIR + "plane_frag.glsl");
+	prog_grd->setVerbose(true);
+	prog_grd->init();
+	prog_grd->addAttribute("aPos");
+	prog_grd->addAttribute("aNor");
+	prog_grd->addAttribute("aTex");
+	prog_grd->addUniform("MV");
+	prog_grd->addUniform("P");
+	prog_grd->addUniform("T1");
+	prog_grd->addUniform("lightPos1");
+	prog_grd->addUniform("lightPos2");
+	prog_grd->addUniform("intensity1");
+	prog_grd->addUniform("intensity2");
+
+	prog_grd->addUniform("texture0");
+	// prog_grd->addUniform("T");
+	// prog_grd->addAttribute("aTex");
+
+	prog_grd->addUniform("ka");
+	prog_grd->addUniform("kd");
+	prog_grd->addUniform("ks");
+	prog_grd->addUniform("s");
+	prog_grd->setVerbose(false);
+
 
 	prog = make_shared<Program>();
 	prog->setShaderNames(RESOURCE_DIR + "vert.glsl", RESOURCE_DIR + "frag.glsl");
@@ -368,6 +529,8 @@ static void init(string objFile[])
 	prog->addUniform("ks");
 	prog->addUniform("s");
 	prog->setVerbose(false);
+
+
 	
 	camera = make_shared<Camera>();
 	camera->setInitDistance(2.0f);
@@ -388,22 +551,21 @@ static void init(string objFile[])
 	shapeSun->init();
 
 	shapeGround = make_shared<Shape>();
-	shapeGround->loadMesh(RESOURCE_DIR + "cube.obj");
+	shapeGround->loadMesh(RESOURCE_DIR + "cube2.obj");
 	shapeGround->fitToUnitBox();
 	shapeGround->init();
 
+	texture0 = make_shared<Texture>();
+	texture0->setFilename(RESOURCE_DIR + "Grass01.jpg");
+	texture0->init();
+	texture0->setUnit(0);
+	texture0->setWrapModes(GL_REPEAT, GL_REPEAT);
 	
 	GLSL::checkError(GET_FILE_LINE);
 
-
-	
-	// for (int i = 0; i < r; ++i) {
-	// 	for (int j = 0; j < c; ++j) {
-	// 		worldSpaceX[i][j] = j * spacing;
-	// 		worldSpaceZ[i][j] = i * spacing;
-	// 		printf("(%f, %f) ", worldSpaceX[i][j], worldSpaceZ[i][j]);
-	// 	} cout << endl;
-	// }
+	T1[0][0] = 100.0f;
+	T1[1][1] = 100.0f;
+	T1[2][2] = 1.0f;
 
 }
 
@@ -438,12 +600,22 @@ static void render(Material* mats, Light* lights, InputManager* inputManager)
 	camera->applyProjectionMatrix(P);
 	MV->pushMatrix();
 
+
+	drawHUD(P, MV, lights, mats, vec3(.075, .065, -.2), shape1);
+	drawHUD(P, MV, lights, mats, vec3(-0.075, 0.065, -.2), shape);
+
+
 	// MV->translate(0, 0, -10);
 
-
-
-
-	camera->applyViewMatrix(MV);
+	
+	// Check camera tracking mode
+	if (keyToggles['t']) {
+		camera->applyViewMatrix(MV);
+	}
+	else {
+		camera->applyViewMatrixFreeLook(MV);
+	}
+	
 	// MV->translate(0, 0, -10);
 	// prog->bind();
 
@@ -454,48 +626,14 @@ static void render(Material* mats, Light* lights, InputManager* inputManager)
 	
 	if (inputManager->mode == InputManager::Mode::Phong) {
 
-		prog->bind();
 
 		drawSun(P, MV, lights, mats);
 		drawGround(P, MV, lights, mats);
 
-		for (int i = 0; i < im->coords->r; ++i) {
-			for (int j = 0; j < im->coords->c; ++j) {
-				MV->pushMatrix();
-				MV->translate(im->coords->worldSpaceX[i][j], 0, im->coords->worldSpaceZ[i][j]);
 
-				glUniformMatrix4fv(prog->getUniform("P"), 1, GL_FALSE, glm::value_ptr(P->topMatrix()));
-				glUniformMatrix4fv(prog->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
-				glUniform3f(prog->getUniform("lightPos1"), lights->lights[0]->pos.x, lights->lights[0]->pos.y, lights->lights[0]->pos.z);
-				glUniform3f(prog->getUniform("lightPos2"), lights->lights[1]->pos.x, lights->lights[1]->pos.y, lights->lights[1]->pos.z);
-				glUniform1f(prog->getUniform("intensity1"), lights->lights[0]->intensity);
-				glUniform1f(prog->getUniform("intensity2"), lights->lights[1]->intensity);
+		prog->bind();
 
-				MatNode* currMat = mats->getCurrMat();
-				vec3 currKa  = currMat->ka;
-				vec3 currKd  = currMat->kd;
-				vec3 currKs  = currMat->ks;
-				float currS = currMat->s;
-
-				glUniform3f(prog->getUniform("ka"), currKa.x, currKa.y, currKa.z);
-				glUniform3f(prog->getUniform("kd"), im->coords->colors[i][j].x, im->coords->colors[i][j].y, im->coords->colors[i][j].z);
-				glUniform3f(prog->getUniform("ks"), im->coords->ks[i][j].x, im->coords->ks[i][j].y, im->coords->ks[i][j].z);
-				glUniform1f(prog->getUniform("s"), currS);
-
-				if (int(im->coords->whichShape[i][j]) == 1) {
-					shape->draw(prog);
-				}
-				else {
-					shape1->draw(prog);
-				}
-
-				MV->popMatrix();
-			}
-		}
-
-		prog->unbind();
-
-
+		drawObjects(P, MV, lights, mats, im);
 
 		
 	}
@@ -528,6 +666,7 @@ static void render(Material* mats, Light* lights, InputManager* inputManager)
 		shape->draw(prog_cel);
 		prog_cel->unbind();
 	}
+	
 	
 	
 	MV->popMatrix();
@@ -636,11 +775,11 @@ int main(int argc, char **argv)
 		cout << "Selecting the bunny.obj and cube.obj by default..." << endl;
 		cout << "Enter another .obj file name as third argument to select it instead. " << endl;
 		objFile[0] = "bunny.obj";
-		objFile[1] = "cube.obj";
+		objFile[1] = "sphere.obj";
 	}
 	else if (argc < 4) {
 		objFile[0] = argv[2];
-		objFile[1] = "cube.obj";
+		objFile[1] = "sphere.obj";
 	}
 	else {
 		objFile[0] = argv[2];
@@ -654,7 +793,7 @@ int main(int argc, char **argv)
 		return -1;
 	}
 	// Create a windowed mode window and its OpenGL context.
-	window = glfwCreateWindow(640, 480, "YOUR NAME", NULL, NULL);
+	window = glfwCreateWindow(640, 480, "ISAAC PITBLADO", NULL, NULL);
 	if(!window) {
 		glfwTerminate();
 		return -1;
@@ -683,8 +822,7 @@ int main(int argc, char **argv)
 	glfwSetMouseButtonCallback(window, mouse_button_callback);
 	// Set the window resize call back.
 	glfwSetFramebufferSizeCallback(window, resize_callback);
-	// Initialize scene.
-	init(objFile);
+
 	// Initialize materials.
 	Material* mats = initMaterials();
 
@@ -699,6 +837,10 @@ int main(int argc, char **argv)
 	inputManager->mats = mats;
 	inputManager->celMats = celMats;
 	inputManager->coords = coords;
+
+	// Initialize scene.
+	init(objFile, inputManager);
+	
 
 
 	// Allows access of Materials pointer in key callback
