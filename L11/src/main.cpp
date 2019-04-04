@@ -17,11 +17,21 @@
 #include "Program.h"
 #include "MatrixStack.h"
 
-using namespace std;
+// using namespace std;
 using glm::vec4;
 using glm::vec3;
 using glm::vec2;
 using glm::mat4;
+using std::string;
+using std::cerr;
+using std::endl;
+using std::cout;
+using std::make_shared;
+using std::vector;
+using std::uniform_real_distribution;
+using std::default_random_engine;
+using std::shared_ptr;
+using std::printf;
 
 
 GLFWwindow *window; // Main application window
@@ -45,6 +55,11 @@ enum SplineType
 };
 
 SplineType type = BEZIER;
+
+mat4 B_BEZIER;
+mat4 B_CATMULL_ROM;
+mat4 B_BASIS;
+mat4 B_SPLIT_TYPE_COUNT;
 
 static void error_callback(int error, const char *description)
 {
@@ -131,8 +146,25 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 	}
 }
 
-void printMat4(mat4 m) {
-	for (int i = 0; i < m.)
+void printMat4(mat4 m) 
+{
+	for(int i = 0; i < 4; ++i) {
+		for(int j = 0; j < 4; ++j) {
+			// mat[j] returns the jth column
+			printf("%- 5.2f ", m[j][i]);
+		}
+		printf("\n");
+	}
+	printf("\n");
+}
+
+void printVec4(vec4 v) {
+	for (int i = 0; i < 4; ++i) {
+		printf("%- 5.2f ", v[i]);
+	}
+	printf("\n");
+	// cout << "v ( " << v.x << ", " << v.y << ", " << v.z << endl;
+	
 }
 
 static void init()
@@ -162,6 +194,28 @@ static void init()
 	// You can intersperse this line in your code to find the exact location
 	// of your OpenGL error.
 	GLSL::checkError(GET_FILE_LINE);
+
+	// Fill column by column
+	B_BEZIER[0] = vec4(1.0f, 0.0f, 0.0f, 0.0f);
+	B_BEZIER[1] = vec4(-3.0f, 3.0f, 0.0f, 0.0f);
+	B_BEZIER[2] = vec4(3.0f, -6.0f, 3.0f, 0.0f);
+	B_BEZIER[3] = vec4(-1.0f, 3.0f, -3.0f, 1.0f);
+
+
+	B_CATMULL_ROM[0] = vec4(0.0f, 2.0f, 0.0f, 0.0f);
+	B_CATMULL_ROM[1] = vec4(-1.0f, 0.0f, 1.0f, 0.0f);
+	B_CATMULL_ROM[2] = vec4(2.0f, -5.0f, 4.0f, -1.0f);
+	B_CATMULL_ROM[3] = vec4(-1.0f, 3.0f, -3.0f, 1.0f);
+	B_CATMULL_ROM = 0.5f * B_CATMULL_ROM;
+
+
+	B_BASIS[0] = vec4(1.0f, 4.0f, 1.0f, 0.0f);
+	B_BASIS[1] = vec4(-3.0f, 0.0f, 3.0f, 0.0f);
+	B_BASIS[2] = vec4(3.0f, -6.0f, 3.0f, 0.0f);
+	B_BASIS[3] = vec4(-1.0f, 3.0f, -3.0f, 1.0f);
+	B_BASIS = (1.0f /6.0f) * B_BASIS;
+
+	
 }
 
 void render()
@@ -203,7 +257,7 @@ void render()
 	glEnd();
 	glLineWidth(1.0f);
 	if(keyToggles[(unsigned)'l']) {
-		glColor3f(1.0f, 0.5f, 0.5f);
+		glColor3f(1.0f, 0.0f, 0.0f);
 		glBegin(GL_LINE_STRIP);
 		for(int i = 0; i < ncps; ++i) {
 			glVertex3f(cps[i].x, cps[i].y, cps[i].z);
@@ -212,7 +266,152 @@ void render()
 	}
 
 	// INSERT CODE HERE
-	mat4 B(1.0f);
+	mat4* B;
+	if (type == BEZIER) {
+		B = &B_BEZIER;
+	}
+	else if (type == CATMULL_ROM) {
+		B = &B_CATMULL_ROM;
+	}
+	else if (type == BASIS) {
+		B = &B_BASIS;
+	}
+
+	// Fill in G column by column
+	mat4 G;
+	glColor3f(0.0f, 0.0f, 0.0f);
+	// glLineWidth(3.0f);
+
+	
+
+	if (cps.size() >= 4) {
+		// drawing curves
+		glLineWidth(1.0f);
+		for (int i = 0; i < cps.size()-3; ++i){
+			glBegin(GL_LINE_STRIP);
+			G[0] = glm::vec4(cps[i], 0.0f);
+			G[1] = glm::vec4(cps[i+1], 0.0f);
+			G[2] = glm::vec4(cps[i+2], 0.0f);
+			G[3] = glm::vec4(cps[i+3], 0.0f);
+
+			for(float u = 0.0f; u < 1.0f; u+=0.01f) {
+				// Fill in uVec
+				glm::vec4 uVec(1.0f, u, u*u, u*u*u);
+				// Compute position at u
+				glm::vec4 p = G*(*B*uVec);
+
+				glVertex3f(p.x, p.y, p.z);
+			}
+			glEnd();
+		}
+
+
+		// frenet frame
+		float kfloat;
+		float speed = 0.5f;
+
+		float u = std::modf(std::fmod(t*speed, ncps-3.0f), &kfloat);
+		// printf("U: %f\n", u);
+		int k = (int)std::floor(kfloat);
+		G[0] = glm::vec4(cps[k], 0.0f);
+		G[1] = glm::vec4(cps[k+1], 0.0f);
+		G[2] = glm::vec4(cps[k+2], 0.0f);
+		G[3] = glm::vec4(cps[k+3], 0.0f);
+
+		vec4 uVec0 = vec4(1.0f, u, u*u, u*u*u);
+		vec4 uVec1 = vec4(0.0f, 1.0f, 2.0f * u, 3.0f * u * u); // derivative
+		vec4 uVec2 = vec4(0.0f, 0.0f, 2.0f , 6.0f * u ); // second derivative
+
+		vec4 p_0 = G* (*B * uVec0);
+		vec4 p_1 = G *(*B*uVec1); 
+		vec4 p_2 = G *(*B*uVec2);
+
+		vec4 tangent = p_1 / glm::length(p_1);
+		vec4 cross_p1_p2 = vec4(glm::cross(vec3(p_1), vec3(p_2)), 0.0f);
+		vec4 binorm = cross_p1_p2 / glm::length(cross_p1_p2);
+		vec4 normal = vec4(glm::cross(vec3(tangent), vec3(binorm)), 0.0f);
+		// p_1 = p_1 / glm::length(p_1); // normalized
+		// p_2 = p_2 / glm::length(p_2); // normalized
+		// cout << "p_1: (" << p_1.x << ", " << p_1.y << ", " << p_1.z << ")" << endl;
+		if (keyToggles[(unsigned) 'd']) {
+			cout << "p_0: " << endl;
+			printVec4(p_0);
+			for (int i = 0; i < cps.size(); ++i) {
+				printVec4(vec4(cps[i], 0.0f));
+			}
+		}
+		
+		// tangent
+		float magnitudeOfLines = 0.25f;
+		glLineWidth(5.0f);
+		glColor3f(1.0f, 0.0f, 0.0f);
+		glBegin(GL_LINE_STRIP);
+		for (float i = 0; i < magnitudeOfLines; i+=0.01f) {
+			vec4 tan_p = p_0 + i * tangent;
+			// vec4 binorm_p = p_0 + i * binorm;
+			// vec4 binorm = p_0 + i 
+			// glVertex3f(tmp.x, tmp.y, tmp.z);
+			glVertex3f(tan_p.x, tan_p.y, tan_p.z);
+
+		}
+		glEnd();
+
+		// binorm
+		glColor3f(0.0f, 0.0f, 1.0f);
+		glBegin(GL_LINE_STRIP);
+		for (float i = 0; i < magnitudeOfLines; i+=0.01f) {
+			// vec4 tan_p = p_0 + i * tangent;
+			vec4 binorm_p = p_0 + i * binorm;
+			// vec4 binorm = p_0 + i 
+			// glVertex3f(tmp.x, tmp.y, tmp.z);
+			glVertex3f(binorm_p.x, binorm_p.y, binorm_p.z);
+
+		}
+		glEnd();
+
+		// normal
+		glColor3f(0.0f, 1.0f, 0.0f);
+		glBegin(GL_LINE_STRIP);
+		for (float i = 0; i < magnitudeOfLines; i+=0.01f) {
+			// vec4 tan_p = p_0 + i * tangent;
+			vec4 norm_p = p_0 + i * normal;
+			// vec4 binorm = p_0 + i 
+			// glVertex3f(tmp.x, tmp.y, tmp.z);
+			glVertex3f(norm_p.x, norm_p.y, norm_p.z);
+
+		}
+		glEnd();
+
+
+
+
+
+		// printf("G\n");
+		// printMat4(G);
+
+		// cout << "k: " << k << endl;
+		// for (float _u = 0.0f; _u < 1.0f; _u+=0.01f) {
+
+		// }
+	}
+
+
+
+
+
+
+
+
+	// DEBUG
+	if (keyToggles[(unsigned)'d']) {
+
+		printf("G\n");
+		printMat4(G);
+		printf("B %i\n", (int) type);
+		printMat4(*B);
+		keyToggles[(unsigned)'d'] = false;
+	}
+
 	
 
 
