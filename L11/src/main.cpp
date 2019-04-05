@@ -285,7 +285,7 @@ void render()
 	
 
 	if (cps.size() >= 4) {
-		// drawing curves
+		// drawing curves between points
 		glLineWidth(1.0f);
 		for (int i = 0; i < cps.size()-3; ++i){
 			glBegin(GL_LINE_STRIP);
@@ -313,6 +313,7 @@ void render()
 		float u = std::modf(std::fmod(t*speed, ncps-3.0f), &kfloat);
 		// printf("U: %f\n", u);
 		int k = (int)std::floor(kfloat);
+
 		G[0] = glm::vec4(cps[k], 0.0f);
 		G[1] = glm::vec4(cps[k+1], 0.0f);
 		G[2] = glm::vec4(cps[k+2], 0.0f);
@@ -323,16 +324,15 @@ void render()
 		vec4 uVec2 = vec4(0.0f, 0.0f, 2.0f , 6.0f * u ); // second derivative
 
 		vec4 p_0 = G* (*B * uVec0);
-		vec4 p_1 = G *(*B*uVec1); 
-		vec4 p_2 = G *(*B*uVec2);
+		vec4 p_1 = G *(*B * uVec1); 
+		vec4 p_2 = G *(*B * uVec2);
 
-		vec4 tangent = p_1 / glm::length(p_1);
 		vec4 cross_p1_p2 = vec4(glm::cross(vec3(p_1), vec3(p_2)), 0.0f);
-		vec4 binorm = cross_p1_p2 / glm::length(cross_p1_p2);
-		vec4 normal = vec4(glm::cross(vec3(tangent), vec3(binorm)), 0.0f);
-		// p_1 = p_1 / glm::length(p_1); // normalized
-		// p_2 = p_2 / glm::length(p_2); // normalized
-		// cout << "p_1: (" << p_1.x << ", " << p_1.y << ", " << p_1.z << ")" << endl;
+
+		vec4 tangent = p_1 / glm::length(p_1); // T(u) = p'(u) / ||p'(u)||
+		vec4 binorm = cross_p1_p2 / glm::length(cross_p1_p2); // B(u) = p'(u) x p''(u) / ||p'(u) x p''(u)||
+		vec4 normal = vec4(glm::cross(vec3(tangent), vec3(binorm)), 0.0f); // N(u) = T(u) x B(u)
+		
 		if (keyToggles[(unsigned) 'd']) {
 			cout << "p_0: " << endl;
 			printVec4(p_0);
@@ -341,66 +341,52 @@ void render()
 			}
 		}
 		
-		// tangent
+
 		float magnitudeOfLines = 0.25f;
 		glLineWidth(5.0f);
+
+		// tangent
 		glColor3f(1.0f, 0.0f, 0.0f);
 		glBegin(GL_LINE_STRIP);
-		for (float i = 0; i < magnitudeOfLines; i+=0.01f) {
-			vec4 tan_p = p_0 + i * tangent;
-			// vec4 binorm_p = p_0 + i * binorm;
-			// vec4 binorm = p_0 + i 
-			// glVertex3f(tmp.x, tmp.y, tmp.z);
-			glVertex3f(tan_p.x, tan_p.y, tan_p.z);
+		// for (float i = 0; i < magnitudeOfLines; i+=0.01f) {
+		// 	vec4 tan_p = p_0 + i * tangent;
+		// 	glVertex3f(tan_p.x, tan_p.y, tan_p.z);
+		// }
 
-		}
+		vec4 tan_p0 = p_0 + 0.0f * tangent;
+		glVertex3f(tan_p0.x, tan_p0.y, tan_p0.z);
+		vec4 tan_p1 = p_0 + magnitudeOfLines * tangent;
+		glVertex3f(tan_p1.x, tan_p1.y, tan_p1.z);
 		glEnd();
 
 		// binorm
 		glColor3f(0.0f, 0.0f, 1.0f);
 		glBegin(GL_LINE_STRIP);
-		for (float i = 0; i < magnitudeOfLines; i+=0.01f) {
-			// vec4 tan_p = p_0 + i * tangent;
-			vec4 binorm_p = p_0 + i * binorm;
-			// vec4 binorm = p_0 + i 
-			// glVertex3f(tmp.x, tmp.y, tmp.z);
-			glVertex3f(binorm_p.x, binorm_p.y, binorm_p.z);
+		// for (float i = 0; i < magnitudeOfLines; i+=0.01f) {
+		// 	vec4 binorm_p = p_0 + i * binorm;
+		// 	glVertex3f(binorm_p.x, binorm_p.y, binorm_p.z);
+		// }
 
-		}
+		vec4 binorm_p0 = p_0 + 0.0f * binorm;
+		glVertex3f(binorm_p0.x, binorm_p0.y, binorm_p0.z);
+		vec4 binorm_p1 = p_0 + magnitudeOfLines * binorm;
+		glVertex3f(binorm_p1.x, binorm_p1.y, binorm_p1.z);
 		glEnd();
 
 		// normal
 		glColor3f(0.0f, 1.0f, 0.0f);
 		glBegin(GL_LINE_STRIP);
-		for (float i = 0; i < magnitudeOfLines; i+=0.01f) {
-			// vec4 tan_p = p_0 + i * tangent;
-			vec4 norm_p = p_0 + i * normal;
-			// vec4 binorm = p_0 + i 
-			// glVertex3f(tmp.x, tmp.y, tmp.z);
-			glVertex3f(norm_p.x, norm_p.y, norm_p.z);
-
-		}
+		// for (float i = 0; i < magnitudeOfLines; i+=0.01f) {
+		// 	vec4 norm_p = p_0 + i * normal;
+		// 	glVertex3f(norm_p.x, norm_p.y, norm_p.z);
+		// }
+		vec4 norm_p0 = p_0 + 0.0f * normal;
+		glVertex3f(norm_p0.x, norm_p0.y, norm_p0.z);
+		vec4 norm_p1 = p_0 + magnitudeOfLines * normal;
+		glVertex3f(norm_p1.x, norm_p1.y, norm_p1.z);
 		glEnd();
 
-
-
-
-
-		// printf("G\n");
-		// printMat4(G);
-
-		// cout << "k: " << k << endl;
-		// for (float _u = 0.0f; _u < 1.0f; _u+=0.01f) {
-
-		// }
 	}
-
-
-
-
-
-
-
 
 	// DEBUG
 	if (keyToggles[(unsigned)'d']) {
@@ -411,10 +397,6 @@ void render()
 		printMat4(*B);
 		keyToggles[(unsigned)'d'] = false;
 	}
-
-	
-
-
 
 	// Unbind the program
 	prog->unbind();
