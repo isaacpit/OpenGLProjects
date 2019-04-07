@@ -154,6 +154,12 @@ enum CameraMode {
 	CAMERA_MODE_COUNT
 };
 
+enum ShaderMode {
+	SHADER_CEL,
+	SHADER_SIMPLE,
+	SHADER_COUNT
+};
+
 GridMode gridMode = DRAW_GRID;
 KeyFramesMode keyframesMode = DRAW_KEYS;
 FrenetFramesMode frenetframesMode = DRAW_FRENET;
@@ -166,6 +172,7 @@ SearchMode searchMode = LINEAR_MODE;
 DrawEqualPoints drawEqualPoints = DRAW_EQUAL_POINTS;
 ConstantSpeedMode constantSpeedMode = GO_CONSTANT_SPEED;
 CameraMode cameraMode = MOUSE_CAMERA;
+ShaderMode shaderMode = SHADER_CEL;
 
 CelMat* celMats = nullptr;
 
@@ -178,8 +185,6 @@ shared_ptr<Shape> heliBody1;
 shared_ptr<Shape> heliBody2;
 shared_ptr<Shape> heliProp1;
 shared_ptr<Shape> heliProp2;
-
-// vector<vec3> keyFramePoints;
 
 vector<std::pair<vec3, quat> > cps;
 
@@ -245,6 +250,12 @@ static void key_callback(GLFWwindow *window, int key, int scancode, int action, 
 		}
 		else if (key == GLFW_KEY_SPACE) {
 			cameraMode = (CameraMode) ((cameraMode + 1) % CAMERA_MODE_COUNT);
+		}
+		else if (key == GLFW_KEY_M) {
+			celMats->nextCelMat();
+		}
+		else if (key == GLFW_KEY_V) {
+			shaderMode = (ShaderMode) ((shaderMode + 1) % SHADER_COUNT);
 		}
 		else if (key == GLFW_KEY_B) {
 			// debug build table
@@ -368,23 +379,22 @@ void drawGrid() {
 	glEnd();
 }
 
-void drawHeli() {
-	heliBody1->draw(progNormal);
-	heliBody2->draw(progNormal);
-	heliProp1->draw(progNormal);
-	heliProp2->draw(progNormal);
+void drawHeli(shared_ptr<Program> prog) {
+	heliBody1->draw(prog);
+	heliBody2->draw(prog);
+	heliProp1->draw(prog);
+	heliProp2->draw(prog);
 }
 
-
-void drawHeliKeyFrame(vec3 p, quat q, shared_ptr<MatrixStack> MV) {
+void drawHeliKeyFrame(vec3 p, quat q, shared_ptr<MatrixStack> MV, shared_ptr<Program> prog) {
 	// p
 	mat4 E0 = glm::mat4_cast(glm::normalize(q));
 	MV->pushMatrix();
 	MV->translate(p);
 	MV->multMatrix(E0);
-	glUniformMatrix4fv(progNormal->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
+	glUniformMatrix4fv(prog->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
 	MV->popMatrix();
-	drawHeli();
+	drawHeli(prog);
 }
 
 void drawFrenetFrame(vec3 v, shared_ptr<MatrixStack> MV, shared_ptr<MatrixStack> P, float length = 1.0f) {
@@ -475,13 +485,6 @@ void buildTable() {
 
 				usTable.push_back(std::make_pair(u_k, s));
 				
-
-				// if (keyToggles[(unsigned)'d']) {
-				// 	printf("i_a: % 6d u: % 6.3f du: % 6.3f u_k: % 6.3f ", i_a, u, du,u_k);
-				// 	printf("p: (% 10.6f, % 10.6f, % 10.6f) ", P_1.x, P_1.y, P_1.z);
-				// 	// printf("p_a: (% 10.6f, % 10.6f, % 10.6f) ", P_a.x, P_a.y, P_a.z);
-				// 	printf("s: % 10.6f \n", s);
-				// }
 			}
 		}
 		else {
@@ -524,11 +527,10 @@ void buildTable() {
 }
 
 bool inRange(float s, int idx) {
-	// int idx_prev_elem = ((idx - 1) >= 0) ? idx - 1 : 0;
+	
 	int idx_next_elem = ((idx + 1) < usTable.size()) ? idx + 1 : usTable.size() - 1;
 
 	float prev_elem = usTable.at(idx).second;
-	// float curr_elem = usTable.at(i).second;
 	float next_elem = usTable.at(idx_next_elem).second;
 	
 	bool result = false;
@@ -538,8 +540,6 @@ bool inRange(float s, int idx) {
 
 int binarySearch(float s, int bottom, int top) {
 	int mid = std::floor((top + bottom) / 2);
-	// if (keyToggles[(unsigned)'d']) {
-		// cout << "mid: " << mid << endl;
 
 	if (inRange(s, mid)) {
 		return mid;
@@ -559,12 +559,10 @@ int binarySearch(float s, int bottom, int top) {
 
 float s2u(float s)
 {
-	// cout << "s: " << s << endl;
+	
 	if (s <= usTable.front().second) {
-		// cout << "edge case!" << endl;
 		return usTable.front().first;
 	}
-	// INSERT CODE HERE
 	if (keyToggles[(unsigned)'d']) {
 		cout << "Using " << search_names[searchMode] << " search" << endl;
 	}
@@ -593,11 +591,8 @@ float s2u(float s)
 		}
 
 	}
-	else {
+	else if (searchMode == BINARY_MODE) {
 		// binary search
-		// cout << "executing binary search " << endl;
-
-		// int i = std::floor(usTable.size() / 2);
 		int pos = binarySearch(s, 0, usTable.size()-1);
 		float u_0 = usTable.at(pos).first;
 		float u_1 = usTable.at(pos+1).first;
@@ -608,6 +603,9 @@ float s2u(float s)
 		res = u;
 		
 
+	}
+	else {
+		cerr << "Error: invalid search mode" << endl;
 	}
 
 	if (keyToggles[(unsigned)'d']) keyToggles[(unsigned)'d'] = false;
@@ -662,7 +660,7 @@ static void init()
 	
 	keyToggles[(unsigned)'c'] = true;
 	
-	// For drawing the bunny
+	// Super simple shader
 	progNormal = make_shared<Program>();
 	progNormal->setShaderNames(RESOURCE_DIR + "normal_vert.glsl", RESOURCE_DIR + "normal_frag.glsl");
 	progNormal->setVerbose(true);
@@ -682,6 +680,7 @@ static void init()
 	progSimple->addUniform("MV");
 	progSimple->setVerbose(false);
 
+	// Cel shader
 	progCel = make_shared<Program>();
 	progCel->setShaderNames(RESOURCE_DIR + "cel_vert.glsl", RESOURCE_DIR + "cel_frag.glsl");
 	progCel->setVerbose(true);
@@ -696,10 +695,6 @@ static void init()
 	progCel->addUniform("c4");
 	progCel->addUniform("thresh");
 	progCel->setVerbose(false);
-	
-	bunny = make_shared<Shape>();
-	bunny->loadMesh(RESOURCE_DIR + "helicopter_body2.obj");
-	bunny->init();
 		
 	heliBody1 = make_shared<Shape>();
 	heliBody1->loadMesh(RESOURCE_DIR + "helicopter_body1.obj");
@@ -748,15 +743,6 @@ static void init()
 	mat4 E2 = glm::mat4_cast(glm::normalize(q2));
 	mat4 E3 = glm::mat4_cast(glm::normalize(q3));
 	mat4 E4 = glm::mat4_cast(glm::normalize(q4));
-
-	// keyFramePoints.push_back(p0);
-	// keyFramePoints.push_back(p1);
-	// keyFramePoints.push_back(p2);
-	// keyFramePoints.push_back(p3);
-	// keyFramePoints.push_back(p4);
-	// keyFramePoints.push_back(p0);
-	// keyFramePoints.push_back(p1);
-	// keyFramePoints.push_back(p2);
 
 	cps.push_back(std::make_pair(p0, q0));
 	cps.push_back(std::make_pair(p1, q1));
@@ -857,12 +843,12 @@ void render()
 	auto MV = make_shared<MatrixStack>();
 
 
-	// calculate helicopters current position 
 	float uMax = cps.size() - 3;
 
 	mat4 G;
 	glColor3f(1.0f, 0.0f, 0.5f);
 
+	// calculate helicopters current position 
 	float kfloat;
 	float speed = 0.5f;
 
@@ -991,19 +977,15 @@ void render()
 		cerr << "Error: undefined camera control mode." << endl;
 	}
 
-
-
 	
 	// Draw origin frame
 	progSimple->bind();
 	glUniformMatrix4fv(progSimple->getUniform("P"), 1, GL_FALSE, glm::value_ptr(P->topMatrix()));
 	glUniformMatrix4fv(progSimple->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
 
-
 	if (gridMode == DRAW_GRID) {
 		drawGrid();
 	}
-
 	
 	if (frenetframesMode == DRAW_FRENET) {
 		for (int i = 0; i < cps.size(); ++i) {
@@ -1033,8 +1015,6 @@ void render()
 		}
 
 		// draw moving frenet frame
-		//////////////////////////////
-
 		vec4 cross_p1_p2 = vec4(glm::cross(vec3(p_1), vec3(p_2)), 0.0f);
 
 		vec4 tangent = p_1 / glm::length(p_1); // T(u) = p'(u) / ||p'(u)||
@@ -1116,13 +1096,33 @@ void render()
 	progSimple->unbind();
 	GLSL::checkError(GET_FILE_LINE);
 	
-	// Draw the bunnies
-	progNormal->bind();
-	// Send projection matrix (same for all bunnies)
-	glUniformMatrix4fv(progNormal->getUniform("P"), 1, GL_FALSE, glm::value_ptr(P->topMatrix()));
-	
+	shared_ptr<Program> prog;
+	if (shaderMode == SHADER_CEL) {
+		prog = progCel;
+
+		prog->bind();
+
+		CelMatNode* currNode = celMats->cel_mats.at(celMats->currCelMatsIndex);
+
+		glUniform4f(prog->getUniform("c1"), currNode->c1[0], currNode->c1[1], currNode->c1[2], currNode->c1[3]);
+		glUniform4f(prog->getUniform("c2"), currNode->c2[0], currNode->c2[1], currNode->c2[2], currNode->c2[3]);
+		glUniform4f(prog->getUniform("c3"), currNode->c3[0], currNode->c3[1], currNode->c3[2], currNode->c3[3]);
+		glUniform4f(prog->getUniform("c4"), currNode->c4[0], currNode->c4[1], currNode->c4[2], currNode->c4[3]);
+		glUniform3f(prog->getUniform("thresh"), currNode->thresh[0], currNode->thresh[1], currNode->thresh[2]);
+
+		glUniformMatrix4fv(prog->getUniform("P"), 1, GL_FALSE, glm::value_ptr(P->topMatrix()));
+		
+	}
+	else if (shaderMode == SHADER_SIMPLE) {
+		prog = progNormal;
+		
+		prog->bind();
+
+		glUniformMatrix4fv(prog->getUniform("P"), 1, GL_FALSE, glm::value_ptr(P->topMatrix()));
+	}
+
 	// The center of the bunny is at (-0.2802, 0.932, 0.0851)
-	glm::vec3 center(-0.2802, 0.932, 0.0851);
+	// glm::vec3 center(-0.2802, 0.932, 0.0851);
 	
 
 	
@@ -1161,7 +1161,7 @@ void render()
 	// draw key frames
 	if (keyframesMode == DRAW_KEYS) {
 		for (int key_idx = 0; key_idx < cps.size()-3; ++key_idx) {
-			drawHeliKeyFrame(cps.at(key_idx).first, cps.at(key_idx).second, MV);
+			drawHeliKeyFrame(cps.at(key_idx).first, cps.at(key_idx).second, MV, prog);
 		}
 	}
 	
@@ -1173,29 +1173,37 @@ void render()
 
 		MV->pushMatrix();
 		MV->rotate(-t * prop1Speed, vec3(0.0, 0.4819, 0.0));
-		glUniformMatrix4fv(progNormal->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
+		glUniformMatrix4fv(prog->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
+		// glUniformMatrix4fv(progCel->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
 		MV->popMatrix();
-		heliProp1->draw(progNormal);
+		// heliProp1->draw(progCel);
+		heliProp1->draw(prog);
 
 		MV->pushMatrix();
 		MV->translate(center2);
 		MV->rotate(t * prop2Speed, vec3(0.0f, 0.0f, 1.0f));
 		MV->translate(-center2);
 
-		glUniformMatrix4fv(progNormal->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
+		// glUniformMatrix4fv(progCel->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
+		glUniformMatrix4fv(prog->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
 		MV->popMatrix();
-		heliProp2->draw(progNormal);
+		// heliProp2->draw(progCel);
+		heliProp2->draw(prog);
 
 
-		glUniformMatrix4fv(progNormal->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
+		// glUniformMatrix4fv(progCel->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
+		glUniformMatrix4fv(prog->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
 		MV->popMatrix();
 
-		heliBody1->draw(progNormal);
-		heliBody2->draw(progNormal);
+		// heliBody1->draw(progCel);
+		// heliBody2->draw(progCel);
+		heliBody1->draw(prog);
+		heliBody2->draw(prog);
 
 		
 	}
-	progNormal->unbind();
+	prog->unbind();
+	// progCel->unbind();
 
 		// Pop stacks
 	MV->popMatrix();
