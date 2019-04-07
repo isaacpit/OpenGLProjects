@@ -1121,10 +1121,7 @@ void render()
 		glUniformMatrix4fv(prog->getUniform("P"), 1, GL_FALSE, glm::value_ptr(P->topMatrix()));
 	}
 
-	// The center of the bunny is at (-0.2802, 0.932, 0.0851)
-	// glm::vec3 center(-0.2802, 0.932, 0.0851);
-	
-
+	// The center of the bunny is at (-0.2802, 0.932, 0.0851)	
 	
 	// The axes of rotatio for the source and target bunnies
 	glm::vec3 axis0, axis1;
@@ -1155,8 +1152,6 @@ void render()
 	
 
 	// Draw the bunny three times: left, right, and interpolated.
-	// left:  use p0 for position and q0 for orientation
-	// right: use p1 for position and q1 for orientation
 
 	// draw key frames
 	if (keyframesMode == DRAW_KEYS) {
@@ -1174,9 +1169,7 @@ void render()
 		MV->pushMatrix();
 		MV->rotate(-t * prop1Speed, vec3(0.0, 0.4819, 0.0));
 		glUniformMatrix4fv(prog->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
-		// glUniformMatrix4fv(progCel->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
 		MV->popMatrix();
-		// heliProp1->draw(progCel);
 		heliProp1->draw(prog);
 
 		MV->pushMatrix();
@@ -1184,26 +1177,20 @@ void render()
 		MV->rotate(t * prop2Speed, vec3(0.0f, 0.0f, 1.0f));
 		MV->translate(-center2);
 
-		// glUniformMatrix4fv(progCel->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
 		glUniformMatrix4fv(prog->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
 		MV->popMatrix();
-		// heliProp2->draw(progCel);
 		heliProp2->draw(prog);
 
 
-		// glUniformMatrix4fv(progCel->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
 		glUniformMatrix4fv(prog->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
 		MV->popMatrix();
 
-		// heliBody1->draw(progCel);
-		// heliBody2->draw(progCel);
 		heliBody1->draw(prog);
 		heliBody2->draw(prog);
 
 		
 	}
 	prog->unbind();
-	// progCel->unbind();
 
 		// Pop stacks
 	MV->popMatrix();
