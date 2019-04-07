@@ -43,6 +43,42 @@ bool keyToggles[256] = {false}; // only for English keyboards!
 GLFWwindow *window; // Main application window
 string RESOURCE_DIR = ""; // Where the resources are loaded from
 
+struct CelMatNode {
+	CelMatNode(vec4 v1, vec4 v2, vec4 v3, vec4 v4, vec3 v5) : c1(v1), c2(v2), c3(v3), c4(v4), thresh(v5) {};
+	vec4 c1;
+	vec4 c2;
+	vec4 c3;
+	vec4 c4;
+	vec3 thresh;
+
+	void printNode() {
+		printf("%f, %f, %f, %f\n", c1[0], c1[1], c1[2],c1[3]); 
+		printf("%f, %f, %f, %f\n", c2[0], c2[1], c2[2],c2[3]); 
+		printf("%f, %f, %f, %f\n", c3[0], c3[1], c3[2],c3[3]); 
+		printf("%f, %f, %f, %f\n", c4[0], c4[1], c4[2],c4[3]); 
+	}
+};
+
+struct CelMat {
+	vector<CelMatNode*> cel_mats = {};
+	int currCelMatsIndex = 0;
+
+	void addNode(CelMatNode* node) { cel_mats.push_back(node); }
+
+	void nextCelMat() {
+		currCelMatsIndex = (currCelMatsIndex + 1 >= cel_mats.size()) ? 0 : currCelMatsIndex + 1;
+	}
+	void prevCelMat() { 
+		currCelMatsIndex = (currCelMatsIndex - 1 < 0) ? cel_mats.size() - 1 : currCelMatsIndex - 1;
+	}
+
+	void printAll() {
+		for (int i =0; i < cel_mats.size(); ++i) {
+			cel_mats.at(i)->printNode();
+		}
+	}
+};
+
 enum SplineType
 {
 	BEZIER = 0,
@@ -87,6 +123,37 @@ enum TwirlMode {
 	TWIRL_COUNT
 };
 
+enum ArcParamMode {
+	APPROX_MODE,
+	GAUSS_QUAD_MODE,
+	ARC_PARAM_COUNT
+};
+
+enum SearchMode {
+	LINEAR_MODE,
+	BINARY_MODE,
+	SEARCH_COUNT
+};
+
+enum DrawEqualPoints {
+	DRAW_EQUAL_POINTS,
+	NO_EQUAL_POINTS,
+	EQUAL_POINTS_COUNT
+};
+
+enum ConstantSpeedMode {
+	GO_CONSTANT_SPEED,
+	NON_CONSTANT_SPEED,
+	CONSTANT_SPEED_COUNT
+};
+
+enum CameraMode {
+	MOUSE_CAMERA,
+	FOLLOW_HELICOPTER_THIRD,
+	FOLLOW_HELICOPTER_FIRST,
+	CAMERA_MODE_COUNT
+};
+
 GridMode gridMode = DRAW_GRID;
 KeyFramesMode keyframesMode = DRAW_KEYS;
 FrenetFramesMode frenetframesMode = DRAW_FRENET;
@@ -94,9 +161,17 @@ SplineType splineType = CATMULL_ROM;
 HeliMode heliMode = DRAW_HELI;
 QuatMode quatMode = CALC_QUAT;
 TwirlMode twirlFix = TWIRL_FIX;
+ArcParamMode arcParamMode = APPROX_MODE;
+SearchMode searchMode = LINEAR_MODE;
+DrawEqualPoints drawEqualPoints = DRAW_EQUAL_POINTS;
+ConstantSpeedMode constantSpeedMode = GO_CONSTANT_SPEED;
+CameraMode cameraMode = MOUSE_CAMERA;
+
+CelMat* celMats = nullptr;
 
 shared_ptr<Program> progNormal;
 shared_ptr<Program> progSimple;
+shared_ptr<Program> progCel;
 shared_ptr<Camera> camera;
 shared_ptr<Shape> bunny;
 shared_ptr<Shape> heliBody1;
@@ -112,10 +187,18 @@ default_random_engine generator;
 
 float prop1Speed = 3.0f;
 float prop2Speed = 3.0f;
+float T_MAX = 8.0f;
 
 mat4 B_BEZIER;
 mat4 B_CATMULL_ROM;
 mat4 B_BASIS;
+
+vector<std::pair<float,float> > usTable;
+vector<std::pair<float, float> > XW_GAUSS;
+
+std::map<SearchMode, string> search_names;
+
+void buildTable();
 
 static void error_callback(int error, const char *description)
 {
@@ -147,9 +230,45 @@ static void key_callback(GLFWwindow *window, int key, int scancode, int action, 
 		else if (key == GLFW_KEY_T) {
 			twirlFix = (TwirlMode) ((twirlFix + 1) % TWIRL_COUNT);
 		}
-		else if (key == GLFW_KEY_R) {
+		else if (key == GLFW_KEY_A) {
+			arcParamMode = (ArcParamMode) ((arcParamMode + 1) % ARC_PARAM_COUNT);
+			buildTable();
+		}
+		else if (key == GLFW_KEY_S) {
+			searchMode = (SearchMode) ((searchMode + 1) % SEARCH_COUNT);
+		}
+		else if (key == GLFW_KEY_E) {
+			drawEqualPoints = (DrawEqualPoints) ((drawEqualPoints + 1) % EQUAL_POINTS_COUNT);
+		}
+		else if (key == GLFW_KEY_C) {
+			constantSpeedMode = (ConstantSpeedMode) ((constantSpeedMode + 1) % CONSTANT_SPEED_COUNT);
+		}
+		else if (key == GLFW_KEY_SPACE) {
+			cameraMode = (CameraMode) ((cameraMode + 1) % CAMERA_MODE_COUNT);
+		}
+		else if (key == GLFW_KEY_B) {
+			// debug build table
 			cps.clear();
-			int nPoints = 10;
+			int n = 8;
+			for(int i = 0; i < n; ++i) {
+				float alpha = i / (n - 1.0f);
+				float angle = 2.0f * M_PI * alpha;
+				float radius = cos(2.0f * angle);
+				glm::vec3 cp;
+				cp.x = radius * cos(angle);
+				cp.y = radius * sin(angle);
+				cp.z = (1.0f - alpha)*(-0.5) + alpha*0.5;
+				vec3 axis = glm::normalize(vec3(cp.x, cp.y, cp.z));
+				// float angle = distributionLarge(generator) * 90.0f / 180.0f * M_PI;
+				quat q = glm::angleAxis(angle, axis);
+				cps.push_back(std::make_pair(cp, q));
+			}
+			buildTable();
+		}
+		else if (key == GLFW_KEY_R) {
+			// randomly generate points
+			cps.clear();
+			int nPoints = 5;
 			uniform_real_distribution<float> distributionLarge(-10, 10);
 			uniform_real_distribution<float> distributionSmall(0, 10);
 			for(int i = 0; i < nPoints; ++i) {
@@ -167,6 +286,15 @@ static void key_callback(GLFWwindow *window, int key, int scancode, int action, 
 				
 				cps.push_back(std::make_pair(p, q));
 			}
+			// make closed loop by repeating control points
+			if (cps.size() > 3) {
+				cps.push_back(cps.at(0));
+				cps.push_back(cps.at(1));
+				cps.push_back(cps.at(2));
+			}
+
+			buildTable();
+
 		}
 	}
 }
@@ -280,6 +408,249 @@ void drawFrenetFrame(vec3 v, shared_ptr<MatrixStack> MV, shared_ptr<MatrixStack>
 	// progSimple->unbind();
 }
 
+void printTable(vector<std::pair<float, float> > t) {
+	for (int i = 0; i < t.size(); ++i) {
+		printf("% 6.3f %10.5f \n", t[i].first, t[i].second);	
+	}
+}
+
+void buildTable() {
+	usTable.clear();
+
+	int n = 6;
+	float du = 1.0f / (float) (n-1);
+
+	float u = 0.0f;
+	float s = 0.0f;
+	usTable.push_back(std::make_pair(u, s));
+
+	if (arcParamMode == GAUSS_QUAD_MODE) {
+		cout << "Using Gaussian Quadratures to build table..." << endl;
+	}
+	else if (arcParamMode == APPROX_MODE) {
+		cout << "Using Approximation to build table..." << endl;
+	}
+	else {
+		cerr << "Something went wrong. An unknown arc length parametrization mode was activated." << endl;
+	}
+
+	// allow all types for other splines
+	glm::mat4 B = B_CATMULL_ROM;
+
+	for(int k = 0; k < cps.size() - 3; ++k) {
+		glm::mat4 Gk;
+		for(int i = 0; i < 4; ++i) {
+			Gk[i] = glm::vec4(cps[k+i].first, 0.0f);
+		}
+		
+		if (keyToggles[(unsigned)'d']) {
+			// cout << "k: " << k << endl;
+		}
+
+		if (arcParamMode == GAUSS_QUAD_MODE) {
+			for (int i = 1; i < n; ++i) {
+				float u_k = i / (n - 1.0f) + k;
+				u = i / (n - 1.0f) ; // u_b
+				float u_a = u - du;
+				// Compute spline point at u
+				int i_a = u_k / (1.0f / (float) n);
+
+				float sum = 0;
+
+				float tmp_a1 = (u - u_a) / 2.0f;
+				float tmp_b1 = (u + u_a) / 2.0f;
+
+				for (int idx_gauss = 0; idx_gauss < XW_GAUSS.size(); ++idx_gauss) {
+					float x_i = XW_GAUSS[idx_gauss].first;
+					float y_i = tmp_a1 * x_i + tmp_b1;
+					
+					glm::vec4 u_1Vec(0.0f , 1.0f, 2.0f * y_i, 3 * y_i * y_i);
+					glm::vec3 P_1(Gk * (B * u_1Vec));
+				
+					float norm_P_1 = sqrt(glm::dot(P_1, P_1));
+					sum += XW_GAUSS[idx_gauss].second * norm_P_1;
+				}
+				sum = tmp_a1 * sum;
+				s += sum;
+
+				usTable.push_back(std::make_pair(u_k, s));
+				
+
+				// if (keyToggles[(unsigned)'d']) {
+				// 	printf("i_a: % 6d u: % 6.3f du: % 6.3f u_k: % 6.3f ", i_a, u, du,u_k);
+				// 	printf("p: (% 10.6f, % 10.6f, % 10.6f) ", P_1.x, P_1.y, P_1.z);
+				// 	// printf("p_a: (% 10.6f, % 10.6f, % 10.6f) ", P_a.x, P_a.y, P_a.z);
+				// 	printf("s: % 10.6f \n", s);
+				// }
+			}
+		}
+		else {
+			
+			for(int i = 1; i < n; ++i) {
+				// u goes from 0 to 1 within this segment
+				float u_k = i / (n - 1.0f) + k;
+				u = i / (n - 1.0f) ; // u_b
+				float u_a = u - du;
+				// Compute spline point at u
+				int i_a = u_k / (1.0f / (float) n);
+
+
+				glm::vec4 u_bVec(1.0f, u, u*u, u*u*u);
+				glm::vec4 u_aVec(1.0f, u_a, u_a * u_a, u_a *u_a * u_a);
+				glm::vec3 P_b(Gk * (B * u_bVec));
+				glm::vec3 P_a(Gk * (B * u_aVec));
+
+				s += glm::length(P_b - P_a);
+				if (keyToggles[(unsigned)'d']) {
+					printf("i_a: % 6d u: % 6.3f du: % 6.3f u_k: % 6.3f ", i_a, u, du,u_k);
+					printf("p: (% 10.6f, % 10.6f, % 10.6f) ", P_b.x, P_b.y, P_b.z);
+					printf("p_a: (% 10.6f, % 10.6f, % 10.6f) ", P_a.x, P_a.y, P_a.z);
+					printf("s: % 10.6f \n", s);
+				}
+
+				usTable.push_back(std::make_pair(u_k, s));
+
+			}
+		}
+
+	}
+
+	keyToggles[(unsigned)'d'] = true;
+	if (keyToggles[(unsigned)'d']) {
+		cout << "t.size: " << usTable.size() << endl;
+		printTable(usTable);
+	}
+
+}
+
+bool inRange(float s, int idx) {
+	// int idx_prev_elem = ((idx - 1) >= 0) ? idx - 1 : 0;
+	int idx_next_elem = ((idx + 1) < usTable.size()) ? idx + 1 : usTable.size() - 1;
+
+	float prev_elem = usTable.at(idx).second;
+	// float curr_elem = usTable.at(i).second;
+	float next_elem = usTable.at(idx_next_elem).second;
+	
+	bool result = false;
+	if (s > prev_elem && s < next_elem) result = true;
+	return result;
+}
+
+int binarySearch(float s, int bottom, int top) {
+	int mid = std::floor((top + bottom) / 2);
+	// if (keyToggles[(unsigned)'d']) {
+		// cout << "mid: " << mid << endl;
+
+	if (inRange(s, mid)) {
+		return mid;
+	}
+	else if (s < usTable.at(mid).second) {
+		return binarySearch(s, bottom, mid-1);
+	}
+	else if (s > usTable.at(mid).second) {
+		return binarySearch(s, mid + 1, top);
+	}
+	else {
+		return -1;
+		cerr << "critical error" << endl;
+	}
+
+}
+
+float s2u(float s)
+{
+	// cout << "s: " << s << endl;
+	if (s <= usTable.front().second) {
+		// cout << "edge case!" << endl;
+		return usTable.front().first;
+	}
+	// INSERT CODE HERE
+	if (keyToggles[(unsigned)'d']) {
+		cout << "Using " << search_names[searchMode] << " search" << endl;
+	}
+
+	float res = 0.0f;
+
+	if (searchMode == LINEAR_MODE) {
+		// linear search
+		int i = 0;
+		while (i < usTable.size()) {
+			if (usTable.at(i).second > s) {
+				float u_0 = usTable.at(i-1).first;
+				float u_1 = usTable.at(i).first;
+				float s_0 = usTable.at(i-1).second;
+				float s_1 = usTable.at(i).second;
+				float alpha = (s - s_0) / (s_1 - s_0);
+				float u = (1-alpha) * u_0 + alpha * u_1;
+				res = u;
+
+				if (s_0 > s || s_1 < s) {
+					cout << "CRITICAL ERROR: s does not fall between s_0 and s_1" << endl;
+				}
+				break;
+			}
+			i++;
+		}
+
+	}
+	else {
+		// binary search
+		// cout << "executing binary search " << endl;
+
+		// int i = std::floor(usTable.size() / 2);
+		int pos = binarySearch(s, 0, usTable.size()-1);
+		float u_0 = usTable.at(pos).first;
+		float u_1 = usTable.at(pos+1).first;
+		float s_0 = usTable.at(pos).second;
+		float s_1 = usTable.at(pos+1).second;
+		float alpha = (s - s_0) / (s_1 - s_0);
+		float u = (1-alpha) * u_0 + alpha * u_1;
+		res = u;
+		
+
+	}
+
+	if (keyToggles[(unsigned)'d']) keyToggles[(unsigned)'d'] = false;
+	return res;
+}
+
+CelMat* initCelMats() {
+	CelMat* c = new CelMat();
+
+	float f1 = 1.0f;
+	float f2 = 0.6f;
+	float f3 = 0.4f;
+	float f4 = 0.2f;
+
+	vec4 c1_1(1.0f, 0.5f, 0.5f, 1.0f);
+	vec4 c1_2(0.6f, 0.3f, 0.3f, 1.0f);
+	vec4 c1_3(0.4f, 0.2f, 0.2f, 1.0f);
+	vec4 c1_4(0.2f, 0.1f, 0.1f, 1.0f);
+	vec3 t1_1(0.95f, 0.70f, 0.45f);
+
+	CelMatNode* node1 = new CelMatNode(c1_1, c1_2, c1_3, c1_4, t1_1);
+
+	vec4 c2_1(f1 / 2.0f, f1, f1 / 2.0f, 1.0f);
+	vec4 c2_2(f2 / 2.0f, f2, f2 / 2.0f, 1.0f);
+	vec4 c2_3(f3 / 2.0f, f3, f3 / 2.0f, 1.0f);
+	vec4 c2_4(f4 / 2.0f, f4, f4 / 2.0f, 1.0f);
+	vec3 t2_1(0.85f, 0.5f, 0.20f);
+	CelMatNode* node2 = new CelMatNode(c2_1, c2_2, c2_3, c2_4, t2_1);
+
+	vec4 c3_1(f1 / 2.0f, f1 / 2.0f, f1, 1.0f);
+	vec4 c3_2(f2 / 2.0f, f2 / 2.0f, f2, 1.0f);
+	vec4 c3_3(f3 / 2.0f, f3 / 2.0f, f3, 1.0f);
+	vec4 c3_4(f4 / 2.0f, f4 / 2.0f, f4, 1.0f);
+	vec3 t3_1(0.7f, 0.55f, 0.2f);
+	CelMatNode* node3 = new CelMatNode(c3_1, c3_2, c3_3, c3_4, t3_1);
+
+	c->addNode(node1);
+	c->addNode(node2);
+	c->addNode(node3);
+	
+	return c;
+}
+
 static void init()
 {
 	GLSL::checkVersion();
@@ -310,6 +681,21 @@ static void init()
 	progSimple->addUniform("P");
 	progSimple->addUniform("MV");
 	progSimple->setVerbose(false);
+
+	progCel = make_shared<Program>();
+	progCel->setShaderNames(RESOURCE_DIR + "cel_vert.glsl", RESOURCE_DIR + "cel_frag.glsl");
+	progCel->setVerbose(true);
+	progCel->init();
+	progCel->addAttribute("aPos");
+	progCel->addAttribute("aNor");
+	progCel->addUniform("MV");
+	progCel->addUniform("P");
+	progCel->addUniform("c1");
+	progCel->addUniform("c2");
+	progCel->addUniform("c3");
+	progCel->addUniform("c4");
+	progCel->addUniform("thresh");
+	progCel->setVerbose(false);
 	
 	bunny = make_shared<Shape>();
 	bunny->loadMesh(RESOURCE_DIR + "helicopter_body2.obj");
@@ -382,9 +768,10 @@ static void init()
 	cps.push_back(std::make_pair(p2, q2));
 
 
-
-
-
+	// Gaussian Quadrature constants
+	XW_GAUSS.push_back(std::make_pair(-sqrt(3.0f/5.0f), (5.0f / 9.0f)));
+	XW_GAUSS.push_back(std::make_pair(0.0f, (8.0f / 9.0f)));
+	XW_GAUSS.push_back(std::make_pair(sqrt(3.0f/5.0f), (5.0f/9.0f)));
 
 	// create B matrices for splines
 	// Fill column by column
@@ -406,6 +793,14 @@ static void init()
 	B_BASIS[2] = vec4(3.0f, -6.0f, 3.0f, 0.0f);
 	B_BASIS[3] = vec4(-1.0f, 3.0f, -3.0f, 1.0f);
 	B_BASIS = (1.0f /6.0f) * B_BASIS;
+
+	search_names[SearchMode::BINARY_MODE] = "binary";
+	search_names[SearchMode::LINEAR_MODE] = "linear";
+
+	celMats = initCelMats();
+	celMats->printAll();
+
+	buildTable();
 	
 	// Initialize time.
 	glfwSetTime(0.0);
@@ -460,63 +855,10 @@ void render()
 	
 	auto P = make_shared<MatrixStack>();
 	auto MV = make_shared<MatrixStack>();
-	
-	// Apply camera transforms
-	P->pushMatrix();
-	camera->applyProjectionMatrix(P);
-	MV->pushMatrix();
-	camera->applyViewMatrix(MV);
 
 
-	
-	// Draw origin frame
-	progSimple->bind();
-	glUniformMatrix4fv(progSimple->getUniform("P"), 1, GL_FALSE, glm::value_ptr(P->topMatrix()));
-	glUniformMatrix4fv(progSimple->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
-	// glLineWidth(5);
-	// glBegin(GL_LINES);
-	// glColor3f(1, 0, 0);
-	// glVertex3f(0, 0, 0);
-	// glVertex3f(1, 0, 0);
-	// glColor3f(0, 1, 0);
-	// glVertex3f(0, 0, 0);
-	// glVertex3f(0, 1, 0);
-	// glColor3f(0, 0, 1);
-	// glVertex3f(0, 0, 0);
-	// glVertex3f(0, 0, 1);
-	// glEnd();
-	// glLineWidth(1);
-
-	// drawFrenetFrame(vec3(0, 0, 0), MV, P);
-	// drawFrenetFrame(vec3(0, 1, 0), MV, P);
-
-
-	if (gridMode == DRAW_GRID) {
-		drawGrid();
-	}
-
-	// Alpha is the linear interpolation parameter between 0 and 1
-	// float alpha = std::fmod(0.5f*t, 1.0f);
-
-	// glm::vec3 p0_0(-1.0f, 0.0f, 0.0f);
-	// glm::vec3 p0(-1.0f, 0.0f, 0.0f);
-	// glm::vec3 p1( 1.0f, 0.0f, 0.0f);
-	// glm::vec3 p2(4.0f, 3.0f, -1.0f);
-	// glm::vec3 p3(0.0f, 5.0f, 0.0f);
-	// glm::vec3 p4(-3.0f, 2.0f, -1.0f);
-	// glm::vec3 p4_0(-3.0f, 2.0f, -1.0f);
-
+	// calculate helicopters current position 
 	float uMax = cps.size() - 3;
-	// float u = std::fmod(t, uMax);
-	// float idxF = 0.0f;
-	// float fracU = std::modf(u, &idxF);
-	// int idx = (int) idxF;
-
-	// cout << "uMax: " << uMax << " u: " << u << " idxF: " << idxF <<  " idx: " << idx <<  " fracU: " << fracU << endl;
-
-	// glm::vec3 p_i = (1-fracU) * keyFramePoints.at(idx+1) + fracU * keyFramePoints.at(idx+2);
-	// cout << "p_i: " << p_i.x << "," << p_i.y << "," <<  p_i.z << endl;
-
 
 	mat4 G;
 	glColor3f(1.0f, 0.0f, 0.5f);
@@ -524,14 +866,28 @@ void render()
 	float kfloat;
 	float speed = 0.5f;
 
-	float u0_1 = std::modf(std::fmod(t*speed, cps.size()-3.0f), &kfloat);
-	// printf("U: %f\n", u0_1_1);
-	int k = (int)std::floor(kfloat);
 
-	// G[0] = glm::vec4(keyFramePoints[k], 0.0f);
-	// G[1] = glm::vec4(keyFramePoints[k+1], 0.0f);
-	// G[2] = glm::vec4(keyFramePoints[k+2], 0.0f);
-	// G[3] = glm::vec4(keyFramePoints[k+3], 0.0f);
+	float smax = usTable.back().second;
+	float tNorm = std::fmod(t, T_MAX) / T_MAX;
+	float sNorm = tNorm;
+	float s_const = smax * sNorm;
+
+
+	float u0_1 = 0.0f;
+
+	// pick speed mode 
+	if (constantSpeedMode == NON_CONSTANT_SPEED) {
+		u0_1 = std::modf(std::fmod(t*speed, cps.size()-3.0f), &kfloat);
+	}
+	else if (constantSpeedMode == GO_CONSTANT_SPEED) {
+		u0_1 = std::modf(std::fmod(s2u(s_const), cps.size() -3.0f), &kfloat);
+	}
+	else {
+		cerr << "Error: speed mode not defined" << endl;
+	}
+	
+	
+	int k = (int)std::floor(kfloat);
 
 	G[0] = glm::vec4(cps[k].first, 0.0f);
 	G[1] = glm::vec4(cps[k+1].first, 0.0f);
@@ -547,27 +903,113 @@ void render()
 	p_2 = G *(*B * uVec2);
 
 	float len = 0.5f;
+
+
+	mat4 E;
+	if (quatMode == CALC_QUAT) {
+
+		vec4 g0 = vec4(cps.at(k).second.x, cps.at(k).second.y, cps.at(k).second.z, cps.at(k).second.w);
+		vec4 g1 = vec4(cps.at(k+1).second.x, cps.at(k+1).second.y, cps.at(k+1).second.z, cps.at(k+1).second.w);
+		vec4 g2 = vec4(cps.at(k+2).second.x, cps.at(k+2).second.y, cps.at(k+2).second.z, cps.at(k+2).second.w);
+		vec4 g3 = vec4(cps.at(k+3).second.x, cps.at(k+3).second.y, cps.at(k+3).second.z, cps.at(k+3).second.w);
+		
+		G = mat4(g0, g1, g2, g3);
+		if (keyToggles['d']) {
+			cout << "B4: " << endl;
+			printMat4(G);
+		}
+		
+		for (int i = 0; i < 3; ++i) {
+			float dot_prod = glm::dot(G[i], G[i+1]) ;
+			if (keyToggles['d']) {
+				cout << i << " dot: " << dot_prod << endl;;
+			}
+			if (twirlFix == TWIRL_FIX) {
+				if (dot_prod< 0) {
+					G[i+1] = - G[i+1];
+				}
+			}
+
+		}
+		if (keyToggles['d']) {
+			cout << "AFTER: " << endl;
+			printMat4(G);
+		}
+		vec4 qVec = G*(* B * uVec0);
+		quat q_test(qVec[3], qVec[0], qVec[1], qVec[2]);
+		E = glm::mat4_cast(glm::normalize(q_test)); // Creates a rotation matrix
+		E[3] = glm::vec4(p_i.x, p_i.y, p_i.z, 1.0f); // Puts 'p', which is a vec3 that represents the position, into the last column
+
+	}
+	else if (quatMode == LERP_QUAT) {
+		int prev_idx = k+1;
+		int curr_idx = prev_idx + 1;
+		quat q = (1.0f - u0_1) * cps.at(prev_idx).second + u0_1 * cps.at(curr_idx).second;
+		E = glm::mat4_cast(glm::normalize(q));
+		E[3] = glm::vec4(p_i.x, p_i.y, p_i.z, 1.0f);
+		
+		if (keyToggles[(unsigned)'d']) {
+			printf("//////////////\n");
+			printf("k %d | %6.3f %6.3f %6.3f %6.3f\n", prev_idx, q.x, q.y, q.z);
+			for (int i = 0; i < cps.size(); ++i) {
+				printf("i %d | %6.3f %6.3f %6.3f %6.3f\n", i, cps.at(i).second.x, cps.at(i).second.y, cps.at(i).second.z);
+			}
+		}
+	}
+	else {
+		cerr << "ERROR: bad quat mode" << endl;
+	}
+
+	
+	// Apply camera transforms
+	P->pushMatrix();
+	camera->applyProjectionMatrix(P);
+	MV->pushMatrix();
+	if (cameraMode == MOUSE_CAMERA) {
+		camera->applyViewMatrix(MV);
+	}
+	else if (cameraMode == FOLLOW_HELICOPTER_THIRD || cameraMode == FOLLOW_HELICOPTER_FIRST) {
+		vec3 firstPersonOffset(0.0f, 0.1f, 0.0f);
+		vec3 thirdPersonOffset(0.0f, 0.0f, 2.0f);
+		MV->pushMatrix();
+
+		MV->multMatrix(E);
+		if (cameraMode == FOLLOW_HELICOPTER_THIRD) {
+			MV->rotate(90.0f /180.0f * M_PI, vec3(0.0f, 1.0f, 0.0f)); // rotate 90 degrees on y axis to face forward
+			MV->translate(thirdPersonOffset);
+		}
+		else if (cameraMode == FOLLOW_HELICOPTER_FIRST) { 
+			MV->rotate(90.0f /180.0f * M_PI, vec3(0.0f, 1.0f, 0.0f)); // rotate 90 degrees on y axis to face forward
+			MV->translate(firstPersonOffset);
+		}
+
+		mat4 invMat = glm::inverse(MV->topMatrix());
+		MV->popMatrix();
+		MV->multMatrix(invMat);
+	}
+	else {
+		cerr << "Error: undefined camera control mode." << endl;
+	}
+
+
+
+	
+	// Draw origin frame
+	progSimple->bind();
+	glUniformMatrix4fv(progSimple->getUniform("P"), 1, GL_FALSE, glm::value_ptr(P->topMatrix()));
+	glUniformMatrix4fv(progSimple->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
+
+
+	if (gridMode == DRAW_GRID) {
+		drawGrid();
+	}
+
+	
 	if (frenetframesMode == DRAW_FRENET) {
 		for (int i = 0; i < cps.size(); ++i) {
 			drawFrenetFrame(cps.at(i).first, MV, P, len);
 		}
-		// drawFrenetFrame(p0, MV, P, len);
-		// drawFrenetFrame(p1, MV, P, len);
-		// drawFrenetFrame(p2, MV, P, len);
-		// drawFrenetFrame(p3, MV, P, len);
-		// drawFrenetFrame(p4, MV, P, len);
 
-	
-
-
-		// if (keyToggles[(unsigned)'d']) {
-		// 	cout << "keyFramePoints.size(): " << keyFramePoints.size() << endl;
-
-		// 	for (int i = 0; i < keyFramePoints.size(); ++i) {
-		// 		printVec4(vec4(keyFramePoints.at(i), 0.0f));
-		// 	}
-			
-		// }
 		if (cps.size() >= 4) {
 		// drawing curves between points
 			glLineWidth(1.0f);
@@ -598,15 +1040,6 @@ void render()
 		vec4 tangent = p_1 / glm::length(p_1); // T(u) = p'(u) / ||p'(u)||
 		vec4 binorm = cross_p1_p2 / glm::length(cross_p1_p2); // B(u) = p'(u) x p''(u) / ||p'(u) x p''(u)||
 		vec4 normal = vec4(glm::cross(vec3(tangent), vec3(binorm)), 0.0f); // N(u) = T(u) x B(u)
-		
-		// if (keyToggles[(unsigned) 'd']) {
-		// 	cout << "p_i: " << endl;
-		// 	printVec4(p_i);
-		// 	for (int i = 0; i < keyFramePoints.size(); ++i) {
-		// 		printVec4(vec4(keyFramePoints[i], 0.0f));
-		// 	}
-		// }
-		
 
 		float magnitudeOfLines = 0.25f;
 		glLineWidth(5.0f);
@@ -614,10 +1047,6 @@ void render()
 		// tangent
 		glColor3f(1.0f, 0.0f, 0.0f);
 		glBegin(GL_LINE_STRIP);
-		// for (float i = 0; i < magnitudeOfLines; i+=0.01f) {
-		// 	vec4 tan_p = p_i + i * tangent;
-		// 	glVertex3f(tan_p.x, tan_p.y, tan_p.z);
-		// }
 
 		vec4 tan_p0 = p_i + 0.0f * tangent;
 		glVertex3f(tan_p0.x, tan_p0.y, tan_p0.z);
@@ -628,10 +1057,6 @@ void render()
 		// binorm
 		glColor3f(0.0f, 0.0f, 1.0f);
 		glBegin(GL_LINE_STRIP);
-		// for (float i = 0; i < magnitudeOfLines; i+=0.01f) {
-		// 	vec4 binorm_p = p_i + i * binorm;
-		// 	glVertex3f(binorm_p.x, binorm_p.y, binorm_p.z);
-		// }
 
 		vec4 binorm_p0 = p_i + 0.0f * binorm;
 		glVertex3f(binorm_p0.x, binorm_p0.y, binorm_p0.z);
@@ -642,21 +1067,48 @@ void render()
 		// normal
 		glColor3f(0.0f, 1.0f, 0.0f);
 		glBegin(GL_LINE_STRIP);
-		// for (float i = 0; i < magnitudeOfLines; i+=0.01f) {
-		// 	vec4 norm_p = p_i + i * normal;
-		// 	glVertex3f(norm_p.x, norm_p.y, norm_p.z);
-		// }
+
 		vec4 norm_p0 = p_i + 0.0f * normal;
 		glVertex3f(norm_p0.x, norm_p0.y, norm_p0.z);
 		vec4 norm_p1 = p_i + magnitudeOfLines * normal;
 		glVertex3f(norm_p1.x, norm_p1.y, norm_p1.z);
 		glEnd();
 
-		////////////////////
+
 		glLineWidth(1);
 	}
 
-	
+	if((drawEqualPoints == DRAW_EQUAL_POINTS) && !usTable.empty()) {
+			float ds = 0.2;
+			if (arcParamMode == GAUSS_QUAD_MODE) {
+				glColor3f(0.0f, 0.0f, 1.0f);
+			}
+			else {
+				glColor3f(1.0f, 0.0f, 0.0f);
+			}
+			
+			glPointSize(10.0f);
+			glBegin(GL_POINTS);
+			float smax = usTable.back().second; // spline length
+			for(float s = 0.0f; s < smax; s += ds) {
+				// Convert from s to (concatenated) u
+				float uu = s2u(s);
+				// Convert from concatenated u to the usual u between 0 and 1.
+				float kfloat;
+				float u = std::modf(uu, &kfloat);
+				// k is the index of the starting control point
+				int k = (int)std::floor(kfloat);
+				// Compute spline point at u
+				glm::mat4 Gk;
+				for(int i = 0; i < 4; ++i) {
+					Gk[i] = glm::vec4(cps[k+i].first, 0.0f);
+				}
+				glm::vec4 uVec(1.0f, u, u*u, u*u*u);
+				glm::vec3 P(Gk * (*B * uVec));
+				glVertex3fv(&P[0]);
+			}
+			glEnd();
+		}
 
 
 
@@ -714,108 +1166,9 @@ void render()
 	}
 	
 	if (heliMode == DRAW_HELI) {
-		
-
-		// glm::quat uQuat = glm::normalize((1.0f-u0_1)*cps.at(k).second + (u0_1)*cps.at(k+1).second);
-		// cout << uQuat.x << uQuat.y << uQuat.z << uQuat.w << endl;
-
-		// G[0] = glm::vec4(cps[k].second, 0.0f);
-		// G[1] = glm::vec4(cps[k+1].second, 0.0f);
-		// G[2] = glm::vec4(cps[k+2].second, 0.0f);
-		// G[3] = glm::vec4(cps[k+3].second, 0.0f);
-
-		// G = glm::mat4_cast(uQuat);
-		// glm::vec4 qVec = G * (*B * uVec0);
-		// glm::quat q(qVec[3], qVec[0], qVec[1], qVec[2]); // (w, x, y, z)
-		// glm::mat4 E = glm::mat4_cast(glm::normalize(q)); // Creates a rotation matrix
-
-		// for (int i = 0; i < 3; ++i) {
-		// 	float dotQuats = glm::dot(q[i], q[i+1]);
-		// 	if (dotQuats < 0.0) {
-		// 		q[i+1] = -q[i+1];
-		// 	}
-		// 	if (keyToggles[(unsigned)'d']) {
-		// 		if (dotQuats < 0) cout << "dotQuat: " << endl;
-		// 		cout << "iQuat: " << dotQuats << endl;
-		// 		dotQuats = glm::dot(q[i], q[i+1]);
-		// 		cout << "iQuat[t+1]: " << dotQuats << endl;
-		// 	}
-		// }
-		
-
-		// E[3] = glm::vec4(vec3(p_i), 1.0f); // Puts 'p', which is a vec3 that represents the position, into the last column
-		// ALT METHOD
-
-		mat4 E;
-		if (quatMode == CALC_QUAT) {
-
-			vec4 g0 = vec4(cps.at(k).second.x, cps.at(k).second.y, cps.at(k).second.z, cps.at(k).second.w);
-			vec4 g1 = vec4(cps.at(k+1).second.x, cps.at(k+1).second.y, cps.at(k+1).second.z, cps.at(k+1).second.w);
-			vec4 g2 = vec4(cps.at(k+2).second.x, cps.at(k+2).second.y, cps.at(k+2).second.z, cps.at(k+2).second.w);
-			vec4 g3 = vec4(cps.at(k+3).second.x, cps.at(k+3).second.y, cps.at(k+3).second.z, cps.at(k+3).second.w);
-			
-			G = mat4(g0, g1, g2, g3);
-			if (keyToggles['d']) {
-				cout << "B4: " << endl;
-				printMat4(G);
-			}
-			
-			for (int i = 0; i < 3; ++i) {
-				float dot_prod = glm::dot(G[i], G[i+1]) ;
-				if (keyToggles['d']) {
-					cout << i << " dot: " << dot_prod << endl;;
-				}
-				if (twirlFix == TWIRL_FIX) {
-					if (dot_prod< 0) {
-						G[i+1] = - G[i+1];
-					}
-				}
-
-			}
-			if (keyToggles['d']) {
-				cout << "AFTER: " << endl;
-				printMat4(G);
-			}
-			vec4 qVec = G*(* B * uVec0);
-			quat q_test(qVec[3], qVec[0], qVec[1], qVec[2]);
-			E = glm::mat4_cast(glm::normalize(q_test)); // Creates a rotation matrix
-			E[3] = glm::vec4(p_i.x, p_i.y, p_i.z, 1.0f); // Puts 'p', which is a vec3 that represents the position, into the last column
-
-		}
-		else if (quatMode == LERP_QUAT) {
-			int prev_idx = k+1;
-			int curr_idx = prev_idx + 1;
-			quat q = (1.0f - u0_1) * cps.at(prev_idx).second + u0_1 * cps.at(curr_idx).second;
-			E = glm::mat4_cast(glm::normalize(q));
-			E[3] = glm::vec4(p_i.x, p_i.y, p_i.z, 1.0f);
-			
-			if (keyToggles[(unsigned)'d']) {
-				printf("//////////////\n");
-				printf("k %d | %6.3f %6.3f %6.3f %6.3f\n", prev_idx, q.x, q.y, q.z);
-				for (int i = 0; i < cps.size(); ++i) {
-					printf("i %d | %6.3f %6.3f %6.3f %6.3f\n", i, cps.at(i).second.x, cps.at(i).second.y, cps.at(i).second.z);
-				}
-			}
-		}
-		else {
-			cerr << "ERROR: bad quat mode" << endl;
-		}
-		
-
-		// TESTTTINGG //////////////////
-		// vec3 axis_test = glm::normalize(vec3(0.0f, 1.0f, 0.0f));
-		// quat q0 = glm::angleAxis((float)(-90.0f/180.0f*M_PI), axis_test);
-
-		// mat4 E_TEST = glm::mat4_cast(glm::normalize(cps.at(k).second));
-		///////////////////////////////
-
-
-
 		// INTERPOLATED
 		MV->pushMatrix();
 		
-		// MV->translate(p_i);
-		// if (quatMode == LERP_QUAT) MV->translate(p_i);
 		MV->multMatrix(E);
 
 		MV->pushMatrix();
@@ -839,8 +1192,6 @@ void render()
 
 		heliBody1->draw(progNormal);
 		heliBody2->draw(progNormal);
-		// heliProp2->draw(progNormal);
-		// drawHeli(MV);
 
 		
 	}
