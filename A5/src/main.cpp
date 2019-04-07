@@ -75,11 +75,25 @@ enum HeliMode {
 	HELI_COUNT
 };
 
+enum QuatMode {
+	CALC_QUAT,
+	LERP_QUAT,
+	QUAT_COUNT
+};
+
+enum TwirlMode {
+	TWIRL_FIX,
+	NO_FIX,
+	TWIRL_COUNT
+};
+
 GridMode gridMode = DRAW_GRID;
 KeyFramesMode keyframesMode = DRAW_KEYS;
 FrenetFramesMode frenetframesMode = DRAW_FRENET;
 SplineType splineType = CATMULL_ROM;
 HeliMode heliMode = DRAW_HELI;
+QuatMode quatMode = CALC_QUAT;
+TwirlMode twirlFix = TWIRL_FIX;
 
 shared_ptr<Program> progNormal;
 shared_ptr<Program> progSimple;
@@ -90,9 +104,11 @@ shared_ptr<Shape> heliBody2;
 shared_ptr<Shape> heliProp1;
 shared_ptr<Shape> heliProp2;
 
-vector<vec3> keyFramePoints;
+// vector<vec3> keyFramePoints;
 
 vector<std::pair<vec3, quat> > cps;
+
+default_random_engine generator;
 
 float prop1Speed = 3.0f;
 float prop2Speed = 3.0f;
@@ -124,6 +140,33 @@ static void key_callback(GLFWwindow *window, int key, int scancode, int action, 
 		}
 		else if (key == GLFW_KEY_H) {
 			heliMode = (HeliMode) ((heliMode + 1) % HELI_COUNT);
+		}
+		else if (key == GLFW_KEY_Q) {
+			quatMode = (QuatMode) ((quatMode + 1) % QUAT_COUNT);
+		}
+		else if (key == GLFW_KEY_T) {
+			twirlFix = (TwirlMode) ((twirlFix + 1) % TWIRL_COUNT);
+		}
+		else if (key == GLFW_KEY_R) {
+			cps.clear();
+			int nPoints = 10;
+			uniform_real_distribution<float> distributionLarge(-10, 10);
+			uniform_real_distribution<float> distributionSmall(0, 10);
+			for(int i = 0; i < nPoints; ++i) {
+				float x = distributionLarge(generator);
+				float y = distributionLarge(generator);
+				float z = distributionLarge(generator);
+
+				float px = distributionLarge(generator);
+				float py = distributionSmall(generator);
+				float pz = distributionLarge(generator);
+				vec3 axis = glm::normalize(vec3(x, y, z));
+				float angle = distributionLarge(generator) * 90.0f / 180.0f * M_PI;
+				quat q = glm::angleAxis(angle, axis);
+				vec3 p(px, py, pz);
+				
+				cps.push_back(std::make_pair(p, q));
+			}
 		}
 	}
 }
@@ -290,17 +333,17 @@ static void init()
 	
 	camera = make_shared<Camera>();
 
-	glm::vec3 p0(-1.0f, 0.0f, 0.0f);
-	glm::vec3 p1( 2.0f, 0.0f, 0.0f);
-	glm::vec3 p2(4.0f, 3.0f, -1.0f);
-	glm::vec3 p3(0.0f, 5.0f, 0.0f);
-	glm::vec3 p4(-3.0f, 2.0f, -1.0f);
+	glm::vec3 p0(1.0f, 0.0f, 0.0f);
+	glm::vec3 p1(6.0f, 2.0f, 0.0f);
+	glm::vec3 p2(4.0f, 5.0f, -1.0f);
+	glm::vec3 p3(-2.0f, -2.0f, 1.0f);
+	glm::vec3 p4(0.0f, 4.0f, -1.0f);
 
-	vec3 axis0 = glm::normalize(vec3(1.0f, 0.0f, 0.0f));
-	vec3 axis1 = glm::normalize(vec3(1.0f, 0.0f, 0.0));
-	vec3 axis2 = glm::normalize(vec3(1.0f, 1.0f, 0.0f));
-	vec3 axis3 = glm::normalize(vec3(0.0f, 1.0f, 1.0f));
-	vec3 axis4 = glm::normalize(vec3(0.0f, 1.0f, 0.0f));
+	vec3 axis0 = glm::normalize(vec3(1.0f, 1.0f, 0.0f));
+	vec3 axis1 = glm::normalize(vec3(-1.0f, 0.0f, 1.0));
+	vec3 axis2 = glm::normalize(vec3(1.0f, -1.0f, 0.0f));
+	vec3 axis3 = glm::normalize(vec3(0.0f, 1.0f, -1.0f));
+	vec3 axis4 = glm::normalize(vec3(1.0f, 1.0f, 1.0f));
 
 	float angle0 = 90.0f / 180.0f * M_PI;
 	float angle1 = 90.0f / 180.0f * M_PI;
@@ -320,19 +363,14 @@ static void init()
 	mat4 E3 = glm::mat4_cast(glm::normalize(q3));
 	mat4 E4 = glm::mat4_cast(glm::normalize(q4));
 
-
+	// keyFramePoints.push_back(p0);
+	// keyFramePoints.push_back(p1);
+	// keyFramePoints.push_back(p2);
+	// keyFramePoints.push_back(p3);
 	// keyFramePoints.push_back(p4);
-	keyFramePoints.push_back(p0);
-	keyFramePoints.push_back(p1);
-	keyFramePoints.push_back(p2);
-	keyFramePoints.push_back(p3);
-	keyFramePoints.push_back(p4);
-	// keyFramePoints.push_back(p4_0);
-	keyFramePoints.push_back(p0);
-	keyFramePoints.push_back(p1);
-	keyFramePoints.push_back(p2);
-	// keyFramePoints.push_back(p0_0);
-
+	// keyFramePoints.push_back(p0);
+	// keyFramePoints.push_back(p1);
+	// keyFramePoints.push_back(p2);
 
 	cps.push_back(std::make_pair(p0, q0));
 	cps.push_back(std::make_pair(p1, q1));
@@ -468,7 +506,7 @@ void render()
 	// glm::vec3 p4(-3.0f, 2.0f, -1.0f);
 	// glm::vec3 p4_0(-3.0f, 2.0f, -1.0f);
 
-	float uMax = keyFramePoints.size() - 3;
+	float uMax = cps.size() - 3;
 	// float u = std::fmod(t, uMax);
 	// float idxF = 0.0f;
 	// float fracU = std::modf(u, &idxF);
@@ -486,7 +524,7 @@ void render()
 	float kfloat;
 	float speed = 0.5f;
 
-	float u0_1 = std::modf(std::fmod(t*speed, keyFramePoints.size()-3.0f), &kfloat);
+	float u0_1 = std::modf(std::fmod(t*speed, cps.size()-3.0f), &kfloat);
 	// printf("U: %f\n", u0_1_1);
 	int k = (int)std::floor(kfloat);
 
@@ -510,8 +548,8 @@ void render()
 
 	float len = 0.5f;
 	if (frenetframesMode == DRAW_FRENET) {
-		for (int i = 0; i < keyFramePoints.size(); ++i) {
-			drawFrenetFrame(keyFramePoints.at(i), MV, P, len);
+		for (int i = 0; i < cps.size(); ++i) {
+			drawFrenetFrame(cps.at(i).first, MV, P, len);
 		}
 		// drawFrenetFrame(p0, MV, P, len);
 		// drawFrenetFrame(p1, MV, P, len);
@@ -530,10 +568,10 @@ void render()
 		// 	}
 			
 		// }
-		if (keyFramePoints.size() >= 4) {
+		if (cps.size() >= 4) {
 		// drawing curves between points
 			glLineWidth(1.0f);
-			for (int i = 0; i < keyFramePoints.size()-3; ++i){
+			for (int i = 0; i < cps.size()-3; ++i){
 				glBegin(GL_LINE_STRIP);
 				G[0] = glm::vec4(cps[i].first, 0.0f);
 				G[1] = glm::vec4(cps[i+1].first, 0.0f);
@@ -670,7 +708,7 @@ void render()
 
 	// draw key frames
 	if (keyframesMode == DRAW_KEYS) {
-		for (int key_idx = 0; key_idx < keyFramePoints.size()-3; ++key_idx) {
+		for (int key_idx = 0; key_idx < cps.size()-3; ++key_idx) {
 			drawHeliKeyFrame(cps.at(key_idx).first, cps.at(key_idx).second, MV);
 		}
 	}
@@ -706,30 +744,79 @@ void render()
 		
 
 		// E[3] = glm::vec4(vec3(p_i), 1.0f); // Puts 'p', which is a vec3 that represents the position, into the last column
+		// ALT METHOD
 
+		mat4 E;
+		if (quatMode == CALC_QUAT) {
+
+			vec4 g0 = vec4(cps.at(k).second.x, cps.at(k).second.y, cps.at(k).second.z, cps.at(k).second.w);
+			vec4 g1 = vec4(cps.at(k+1).second.x, cps.at(k+1).second.y, cps.at(k+1).second.z, cps.at(k+1).second.w);
+			vec4 g2 = vec4(cps.at(k+2).second.x, cps.at(k+2).second.y, cps.at(k+2).second.z, cps.at(k+2).second.w);
+			vec4 g3 = vec4(cps.at(k+3).second.x, cps.at(k+3).second.y, cps.at(k+3).second.z, cps.at(k+3).second.w);
+			
+			G = mat4(g0, g1, g2, g3);
+			if (keyToggles['d']) {
+				cout << "B4: " << endl;
+				printMat4(G);
+			}
+			
+			for (int i = 0; i < 3; ++i) {
+				float dot_prod = glm::dot(G[i], G[i+1]) ;
+				if (keyToggles['d']) {
+					cout << i << " dot: " << dot_prod << endl;;
+				}
+				if (twirlFix == TWIRL_FIX) {
+					if (dot_prod< 0) {
+						G[i+1] = - G[i+1];
+					}
+				}
+
+			}
+			if (keyToggles['d']) {
+				cout << "AFTER: " << endl;
+				printMat4(G);
+			}
+			vec4 qVec = G*(* B * uVec0);
+			quat q_test(qVec[3], qVec[0], qVec[1], qVec[2]);
+			E = glm::mat4_cast(glm::normalize(q_test)); // Creates a rotation matrix
+			E[3] = glm::vec4(p_i.x, p_i.y, p_i.z, 1.0f); // Puts 'p', which is a vec3 that represents the position, into the last column
+
+		}
+		else if (quatMode == LERP_QUAT) {
+			int prev_idx = k+1;
+			int curr_idx = prev_idx + 1;
+			quat q = (1.0f - u0_1) * cps.at(prev_idx).second + u0_1 * cps.at(curr_idx).second;
+			E = glm::mat4_cast(glm::normalize(q));
+			E[3] = glm::vec4(p_i.x, p_i.y, p_i.z, 1.0f);
+			
+			if (keyToggles[(unsigned)'d']) {
+				printf("//////////////\n");
+				printf("k %d | %6.3f %6.3f %6.3f %6.3f\n", prev_idx, q.x, q.y, q.z);
+				for (int i = 0; i < cps.size(); ++i) {
+					printf("i %d | %6.3f %6.3f %6.3f %6.3f\n", i, cps.at(i).second.x, cps.at(i).second.y, cps.at(i).second.z);
+				}
+			}
+		}
+		else {
+			cerr << "ERROR: bad quat mode" << endl;
+		}
+		
 
 		// TESTTTINGG //////////////////
 		// vec3 axis_test = glm::normalize(vec3(0.0f, 1.0f, 0.0f));
 		// quat q0 = glm::angleAxis((float)(-90.0f/180.0f*M_PI), axis_test);
-		int prev_idx = k+1;
-		int curr_idx = prev_idx + 1;
-		quat q = (1.0f - u0_1) * cps.at(prev_idx).second + u0_1 * cps.at(curr_idx).second;
-		mat4 E_TEST = glm::mat4_cast(glm::normalize(q));
+
 		// mat4 E_TEST = glm::mat4_cast(glm::normalize(cps.at(k).second));
 		///////////////////////////////
 
 
-		if (keyToggles[(unsigned)'d']) {
-			printf("//////////////\n");
-			printf("k %d | %6.3f %6.3f %6.3f %6.3f\n", prev_idx, q.x, q.y, q.z);
-			for (int i = 0; i < cps.size(); ++i) {
-				printf("i %d | %6.3f %6.3f %6.3f %6.3f\n", i, cps.at(i).second.x, cps.at(i).second.y, cps.at(i).second.z);
-			}
-		}
+
 		// INTERPOLATED
 		MV->pushMatrix();
-		MV->translate(p_i);
-		MV->multMatrix(E_TEST);
+		
+		// MV->translate(p_i);
+		// if (quatMode == LERP_QUAT) MV->translate(p_i);
+		MV->multMatrix(E);
 
 		MV->pushMatrix();
 		MV->rotate(-t * prop1Speed, vec3(0.0, 0.4819, 0.0));
@@ -769,6 +856,11 @@ void render()
 
 int main(int argc, char **argv)
 {
+
+	unsigned seed1 = std::chrono::system_clock::now().time_since_epoch().count();
+
+	generator.seed(seed1);
+
 	if(argc < 2) {
 		cout << "Please specify the resource directory." << endl;
 		return 0;
