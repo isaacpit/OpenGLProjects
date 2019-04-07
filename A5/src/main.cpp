@@ -35,6 +35,7 @@ using std::uniform_real_distribution;
 using std::default_random_engine;
 using std::shared_ptr;
 using std::printf;
+using glm::quat;
 
 
 bool keyToggles[256] = {false}; // only for English keyboards!
@@ -90,6 +91,8 @@ shared_ptr<Shape> heliProp1;
 shared_ptr<Shape> heliProp2;
 
 vector<vec3> keyFramePoints;
+
+vector<std::pair<vec3, quat> > cps;
 
 float prop1Speed = 3.0f;
 float prop2Speed = 3.0f;
@@ -176,7 +179,7 @@ void printVec4(vec4 v) {
 }
 
 void drawGrid() {
-	int xMax = 10, yMax = 10, xMin = -10, yMin = -10;
+	int xMax = 10, xMin = -10;
 	float xMaxf = 10.0f, yMaxf = 10.0f, xMinf = -10.0f, yMinf = -10.0f;
 	float height = 0.0f;
 	vec3 color = vec3(0.0f, 0.0f, 0.0f);
@@ -202,10 +205,12 @@ void drawHeli() {
 }
 
 
-void drawHeliKeyFrame(vec3 p, shared_ptr<MatrixStack> MV) {
+void drawHeliKeyFrame(vec3 p, quat q, shared_ptr<MatrixStack> MV) {
 	// p
+	mat4 E0 = glm::mat4_cast(glm::normalize(q));
 	MV->pushMatrix();
 	MV->translate(p);
+	MV->multMatrix(E0);
 	glUniformMatrix4fv(progNormal->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
 	MV->popMatrix();
 	drawHeli();
@@ -285,13 +290,36 @@ static void init()
 	
 	camera = make_shared<Camera>();
 
-	glm::vec3 p0_0(-1.0f, 0.0f, 0.0f);
 	glm::vec3 p0(-1.0f, 0.0f, 0.0f);
 	glm::vec3 p1( 2.0f, 0.0f, 0.0f);
 	glm::vec3 p2(4.0f, 3.0f, -1.0f);
 	glm::vec3 p3(0.0f, 5.0f, 0.0f);
 	glm::vec3 p4(-3.0f, 2.0f, -1.0f);
-	glm::vec3 p4_0(-3.0f, 2.0f, -1.0f);
+
+	vec3 axis0 = glm::normalize(vec3(1.0f, 0.0f, 0.0f));
+	vec3 axis1 = glm::normalize(vec3(1.0f, 0.0f, 0.0));
+	vec3 axis2 = glm::normalize(vec3(1.0f, 1.0f, 0.0f));
+	vec3 axis3 = glm::normalize(vec3(0.0f, 1.0f, 1.0f));
+	vec3 axis4 = glm::normalize(vec3(0.0f, 1.0f, 0.0f));
+
+	float angle0 = 90.0f / 180.0f * M_PI;
+	float angle1 = 90.0f / 180.0f * M_PI;
+	float angle2 = 90.0f / 180.0f * M_PI;
+	float angle3 = 90.0f / 180.0f * M_PI;
+	float angle4 = 90.0f / 180.0f * M_PI;
+
+	quat q0 = glm::angleAxis(angle0, axis0);
+	quat q1 = glm::angleAxis(angle1, axis1);
+	quat q2 = glm::angleAxis(angle2, axis2);
+	quat q3 = glm::angleAxis(angle3, axis3);
+	quat q4 = glm::angleAxis(angle4, axis4);
+
+	mat4 E0 = glm::mat4_cast(glm::normalize(q0));
+	mat4 E1 = glm::mat4_cast(glm::normalize(q1));
+	mat4 E2 = glm::mat4_cast(glm::normalize(q2));
+	mat4 E3 = glm::mat4_cast(glm::normalize(q3));
+	mat4 E4 = glm::mat4_cast(glm::normalize(q4));
+
 
 	// keyFramePoints.push_back(p4);
 	keyFramePoints.push_back(p0);
@@ -304,6 +332,19 @@ static void init()
 	keyFramePoints.push_back(p1);
 	keyFramePoints.push_back(p2);
 	// keyFramePoints.push_back(p0_0);
+
+
+	cps.push_back(std::make_pair(p0, q0));
+	cps.push_back(std::make_pair(p1, q1));
+	cps.push_back(std::make_pair(p2, q2));
+	cps.push_back(std::make_pair(p3, q3));
+	cps.push_back(std::make_pair(p4, q4));
+	cps.push_back(std::make_pair(p0, q0));
+	cps.push_back(std::make_pair(p1, q1));
+	cps.push_back(std::make_pair(p2, q2));
+
+
+
 
 
 
@@ -368,7 +409,7 @@ void render()
 	vec4 p_1; // first derivative
 	vec4 p_2; // second derivative
 	
-	mat4* B;
+	mat4* B = nullptr;
 	if (splineType == BEZIER) {
 		B = &B_BEZIER;
 	}
@@ -417,7 +458,7 @@ void render()
 	}
 
 	// Alpha is the linear interpolation parameter between 0 and 1
-	float alpha = std::fmod(0.5f*t, 1.0f);
+	// float alpha = std::fmod(0.5f*t, 1.0f);
 
 	// glm::vec3 p0_0(-1.0f, 0.0f, 0.0f);
 	// glm::vec3 p0(-1.0f, 0.0f, 0.0f);
@@ -428,10 +469,10 @@ void render()
 	// glm::vec3 p4_0(-3.0f, 2.0f, -1.0f);
 
 	float uMax = keyFramePoints.size() - 3;
-	float u = std::fmod(t, uMax);
-	float idxF = 0.0f;
-	float fracU = std::modf(u, &idxF);
-	int idx = (int) idxF;
+	// float u = std::fmod(t, uMax);
+	// float idxF = 0.0f;
+	// float fracU = std::modf(u, &idxF);
+	// int idx = (int) idxF;
 
 	// cout << "uMax: " << uMax << " u: " << u << " idxF: " << idxF <<  " idx: " << idx <<  " fracU: " << fracU << endl;
 
@@ -445,18 +486,23 @@ void render()
 	float kfloat;
 	float speed = 0.5f;
 
-	float u0 = std::modf(std::fmod(t*speed, keyFramePoints.size()-3.0f), &kfloat);
-	// printf("U: %f\n", u0);
+	float u0_1 = std::modf(std::fmod(t*speed, keyFramePoints.size()-3.0f), &kfloat);
+	// printf("U: %f\n", u0_1_1);
 	int k = (int)std::floor(kfloat);
 
-	G[0] = glm::vec4(keyFramePoints[k], 0.0f);
-	G[1] = glm::vec4(keyFramePoints[k+1], 0.0f);
-	G[2] = glm::vec4(keyFramePoints[k+2], 0.0f);
-	G[3] = glm::vec4(keyFramePoints[k+3], 0.0f);
+	// G[0] = glm::vec4(keyFramePoints[k], 0.0f);
+	// G[1] = glm::vec4(keyFramePoints[k+1], 0.0f);
+	// G[2] = glm::vec4(keyFramePoints[k+2], 0.0f);
+	// G[3] = glm::vec4(keyFramePoints[k+3], 0.0f);
 
-	vec4 uVec0 = vec4(1.0f, u0, u0*u0, u0*u0*u0);
-	vec4 uVec1 = vec4(0.0f, 1.0f, 2.0f * u0, 3.0f * u0 * u0); // derivative
-	vec4 uVec2 = vec4(0.0f, 0.0f, 2.0f , 6.0f * u0 ); // second derivative
+	G[0] = glm::vec4(cps[k].first, 0.0f);
+	G[1] = glm::vec4(cps[k+1].first, 0.0f);
+	G[2] = glm::vec4(cps[k+2].first, 0.0f);
+	G[3] = glm::vec4(cps[k+3].first, 0.0f);
+
+	vec4 uVec0 = vec4(1.0f, u0_1, u0_1*u0_1, u0_1*u0_1*u0_1);
+	vec4 uVec1 = vec4(0.0f, 1.0f, 2.0f * u0_1, 3.0f * u0_1 * u0_1); // derivative
+	vec4 uVec2 = vec4(0.0f, 0.0f, 2.0f , 6.0f * u0_1 ); // second derivative
 
 	p_i = G* (*B * uVec0);
 	p_1 = G *(*B * uVec1); 
@@ -476,23 +522,23 @@ void render()
 	
 
 
-		if (keyToggles[(unsigned)'d']) {
-			cout << "keyFramePoints.size(): " << keyFramePoints.size() << endl;
+		// if (keyToggles[(unsigned)'d']) {
+		// 	cout << "keyFramePoints.size(): " << keyFramePoints.size() << endl;
 
-			for (int i = 0; i < keyFramePoints.size(); ++i) {
-				printVec4(vec4(keyFramePoints.at(i), 0.0f));
-			}
+		// 	for (int i = 0; i < keyFramePoints.size(); ++i) {
+		// 		printVec4(vec4(keyFramePoints.at(i), 0.0f));
+		// 	}
 			
-		}
+		// }
 		if (keyFramePoints.size() >= 4) {
 		// drawing curves between points
 			glLineWidth(1.0f);
 			for (int i = 0; i < keyFramePoints.size()-3; ++i){
 				glBegin(GL_LINE_STRIP);
-				G[0] = glm::vec4(keyFramePoints[i], 0.0f);
-				G[1] = glm::vec4(keyFramePoints[i+1], 0.0f);
-				G[2] = glm::vec4(keyFramePoints[i+2], 0.0f);
-				G[3] = glm::vec4(keyFramePoints[i+3], 0.0f);
+				G[0] = glm::vec4(cps[i].first, 0.0f);
+				G[1] = glm::vec4(cps[i+1].first, 0.0f);
+				G[2] = glm::vec4(cps[i+2].first, 0.0f);
+				G[3] = glm::vec4(cps[i+3].first, 0.0f);
 
 				for(float u0 = 0.0f; u0 < 1.0f; u0+=0.01f) {
 					// Fill in uVec
@@ -515,13 +561,13 @@ void render()
 		vec4 binorm = cross_p1_p2 / glm::length(cross_p1_p2); // B(u) = p'(u) x p''(u) / ||p'(u) x p''(u)||
 		vec4 normal = vec4(glm::cross(vec3(tangent), vec3(binorm)), 0.0f); // N(u) = T(u) x B(u)
 		
-		if (keyToggles[(unsigned) 'd']) {
-			cout << "p_i: " << endl;
-			printVec4(p_i);
-			for (int i = 0; i < keyFramePoints.size(); ++i) {
-				printVec4(vec4(keyFramePoints[i], 0.0f));
-			}
-		}
+		// if (keyToggles[(unsigned) 'd']) {
+		// 	cout << "p_i: " << endl;
+		// 	printVec4(p_i);
+		// 	for (int i = 0; i < keyFramePoints.size(); ++i) {
+		// 		printVec4(vec4(keyFramePoints[i], 0.0f));
+		// 	}
+		// }
 		
 
 		float magnitudeOfLines = 0.25f;
@@ -624,15 +670,66 @@ void render()
 
 	// draw key frames
 	if (keyframesMode == DRAW_KEYS) {
-		for (int i = 0; i < keyFramePoints.size(); ++i) {
-			drawHeliKeyFrame(keyFramePoints.at(i), MV);
+		for (int key_idx = 0; key_idx < keyFramePoints.size()-3; ++key_idx) {
+			drawHeliKeyFrame(cps.at(key_idx).first, cps.at(key_idx).second, MV);
 		}
 	}
 	
 	if (heliMode == DRAW_HELI) {
+		
+
+		// glm::quat uQuat = glm::normalize((1.0f-u0_1)*cps.at(k).second + (u0_1)*cps.at(k+1).second);
+		// cout << uQuat.x << uQuat.y << uQuat.z << uQuat.w << endl;
+
+		// G[0] = glm::vec4(cps[k].second, 0.0f);
+		// G[1] = glm::vec4(cps[k+1].second, 0.0f);
+		// G[2] = glm::vec4(cps[k+2].second, 0.0f);
+		// G[3] = glm::vec4(cps[k+3].second, 0.0f);
+
+		// G = glm::mat4_cast(uQuat);
+		// glm::vec4 qVec = G * (*B * uVec0);
+		// glm::quat q(qVec[3], qVec[0], qVec[1], qVec[2]); // (w, x, y, z)
+		// glm::mat4 E = glm::mat4_cast(glm::normalize(q)); // Creates a rotation matrix
+
+		// for (int i = 0; i < 3; ++i) {
+		// 	float dotQuats = glm::dot(q[i], q[i+1]);
+		// 	if (dotQuats < 0.0) {
+		// 		q[i+1] = -q[i+1];
+		// 	}
+		// 	if (keyToggles[(unsigned)'d']) {
+		// 		if (dotQuats < 0) cout << "dotQuat: " << endl;
+		// 		cout << "iQuat: " << dotQuats << endl;
+		// 		dotQuats = glm::dot(q[i], q[i+1]);
+		// 		cout << "iQuat[t+1]: " << dotQuats << endl;
+		// 	}
+		// }
+		
+
+		// E[3] = glm::vec4(vec3(p_i), 1.0f); // Puts 'p', which is a vec3 that represents the position, into the last column
+
+
+		// TESTTTINGG //////////////////
+		// vec3 axis_test = glm::normalize(vec3(0.0f, 1.0f, 0.0f));
+		// quat q0 = glm::angleAxis((float)(-90.0f/180.0f*M_PI), axis_test);
+		int prev_idx = k+1;
+		int curr_idx = prev_idx + 1;
+		quat q = (1.0f - u0_1) * cps.at(prev_idx).second + u0_1 * cps.at(curr_idx).second;
+		mat4 E_TEST = glm::mat4_cast(glm::normalize(q));
+		// mat4 E_TEST = glm::mat4_cast(glm::normalize(cps.at(k).second));
+		///////////////////////////////
+
+
+		if (keyToggles[(unsigned)'d']) {
+			printf("//////////////\n");
+			printf("k %d | %6.3f %6.3f %6.3f %6.3f\n", prev_idx, q.x, q.y, q.z);
+			for (int i = 0; i < cps.size(); ++i) {
+				printf("i %d | %6.3f %6.3f %6.3f %6.3f\n", i, cps.at(i).second.x, cps.at(i).second.y, cps.at(i).second.z);
+			}
+		}
 		// INTERPOLATED
 		MV->pushMatrix();
 		MV->translate(p_i);
+		MV->multMatrix(E_TEST);
 
 		MV->pushMatrix();
 		MV->rotate(-t * prop1Speed, vec3(0.0, 0.4819, 0.0));
