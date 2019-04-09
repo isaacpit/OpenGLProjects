@@ -160,16 +160,23 @@ enum ShaderMode {
 	SHADER_COUNT
 };
 
+enum DrawSplineMode {
+	DRAW_SPLINE,
+	NO_DRAW_SPLINE,
+	DRAW_SPLINE_COUNT
+};
+
 GridMode gridMode = DRAW_GRID;
 KeyFramesMode keyframesMode = DRAW_KEYS;
 FrenetFramesMode frenetframesMode = DRAW_FRENET;
 SplineType splineType = CATMULL_ROM;
+DrawSplineMode drawSplineMode = DRAW_SPLINE;
 HeliMode heliMode = DRAW_HELI;
 QuatMode quatMode = CALC_QUAT;
 TwirlMode twirlFix = TWIRL_FIX;
-ArcParamMode arcParamMode = APPROX_MODE;
-SearchMode searchMode = LINEAR_MODE;
-DrawEqualPoints drawEqualPoints = DRAW_EQUAL_POINTS;
+ArcParamMode arcParamMode = GAUSS_QUAD_MODE;
+SearchMode searchMode = BINARY_MODE;
+DrawEqualPoints drawEqualPoints = NO_EQUAL_POINTS;
 ConstantSpeedMode constantSpeedMode = GO_CONSTANT_SPEED;
 CameraMode cameraMode = MOUSE_CAMERA;
 ShaderMode shaderMode = SHADER_CEL;
@@ -241,6 +248,9 @@ static void key_callback(GLFWwindow *window, int key, int scancode, int action, 
 		}
 		else if (key == GLFW_KEY_S) {
 			searchMode = (SearchMode) ((searchMode + 1) % SEARCH_COUNT);
+		}
+		else if (key == GLFW_KEY_Z) {
+			drawSplineMode = (DrawSplineMode) ((drawSplineMode + 1) % DRAW_SPLINE_COUNT);
 		}
 		else if (key == GLFW_KEY_E) {
 			drawEqualPoints = (DrawEqualPoints) ((drawEqualPoints + 1) % EQUAL_POINTS_COUNT);
@@ -518,7 +528,6 @@ void buildTable() {
 
 	}
 
-	keyToggles[(unsigned)'d'] = true;
 	if (keyToggles[(unsigned)'d']) {
 		cout << "t.size: " << usTable.size() << endl;
 		printTable(usTable);
@@ -784,7 +793,6 @@ static void init()
 	search_names[SearchMode::LINEAR_MODE] = "linear";
 
 	celMats = initCelMats();
-	celMats->printAll();
 
 	buildTable();
 	
@@ -992,28 +1000,6 @@ void render()
 			drawFrenetFrame(cps.at(i).first, MV, P, len);
 		}
 
-		if (cps.size() >= 4) {
-		// drawing curves between points
-			glLineWidth(1.0f);
-			for (int i = 0; i < cps.size()-3; ++i){
-				glBegin(GL_LINE_STRIP);
-				G[0] = glm::vec4(cps[i].first, 0.0f);
-				G[1] = glm::vec4(cps[i+1].first, 0.0f);
-				G[2] = glm::vec4(cps[i+2].first, 0.0f);
-				G[3] = glm::vec4(cps[i+3].first, 0.0f);
-
-				for(float u0 = 0.0f; u0 < 1.0f; u0+=0.01f) {
-					// Fill in uVec
-					glm::vec4 uVec(1.0f, u0, u0*u0, u0*u0*u0);
-					// Compute position at u
-					glm::vec4 p = G*(*B*uVec);
-
-					glVertex3f(p.x, p.y, p.z);
-				}
-				glEnd();
-			}
-		}
-
 		// draw moving frenet frame
 		vec4 cross_p1_p2 = vec4(glm::cross(vec3(p_1), vec3(p_2)), 0.0f);
 
@@ -1056,6 +1042,31 @@ void render()
 
 
 		glLineWidth(1);
+	}
+
+	if (drawSplineMode == DRAW_SPLINE) {
+		glColor3f(0.0f, 0.0f, 1.0f);
+		if (cps.size() >= 4) {
+		// drawing curves between points
+			glLineWidth(1.0f);
+			for (int i = 0; i < cps.size()-3; ++i){
+				glBegin(GL_LINE_STRIP);
+				G[0] = glm::vec4(cps[i].first, 0.0f);
+				G[1] = glm::vec4(cps[i+1].first, 0.0f);
+				G[2] = glm::vec4(cps[i+2].first, 0.0f);
+				G[3] = glm::vec4(cps[i+3].first, 0.0f);
+
+				for(float u0 = 0.0f; u0 < 1.0f; u0+=0.01f) {
+					// Fill in uVec
+					glm::vec4 uVec(1.0f, u0, u0*u0, u0*u0*u0);
+					// Compute position at u
+					glm::vec4 p = G*(*B*uVec);
+
+					glVertex3f(p.x, p.y, p.z);
+				}
+				glEnd();
+			}
+		}
 	}
 
 	if((drawEqualPoints == DRAW_EQUAL_POINTS) && !usTable.empty()) {
@@ -1188,11 +1199,10 @@ void render()
 		heliBody1->draw(prog);
 		heliBody2->draw(prog);
 
-		
 	}
 	prog->unbind();
 
-		// Pop stacks
+	// Pop stacks
 	MV->popMatrix();
 	P->popMatrix();
 	GLSL::checkError(GET_FILE_LINE);
