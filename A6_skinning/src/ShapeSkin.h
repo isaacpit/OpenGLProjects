@@ -21,7 +21,7 @@ class Program;
 class ShapeSkin
 {
 public:
-	int nbones, nverts;
+	int nbones, nframes, nverts;
 
 	ShapeSkin();
 	virtual ~ShapeSkin();
@@ -39,11 +39,13 @@ private:
 	std::shared_ptr<Program> prog;
 	std::vector<unsigned int> elemBuf;
 	std::vector<float> posBuf;
+	std::vector<float> origPosBuf;
 	std::vector<float> norBuf;
 	std::vector<float> texBuf;
-	std::vector<std::vector<float> > weightBuf;
+	std::vector<float> weightBuf;
 	unsigned elemBufID;
 	unsigned posBufID;
+	unsigned origPosBufID;
 	unsigned norBufID;
 	unsigned texBufID;
 

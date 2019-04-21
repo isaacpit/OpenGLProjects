@@ -40,7 +40,8 @@ ShapeSkin::ShapeSkin() :
 	elemBufID(0),
 	posBufID(0),
 	norBufID(0),
-	texBufID(0)
+	texBufID(0),
+	origPosBufID(0)
 {
 }
 
@@ -59,6 +60,7 @@ void ShapeSkin::loadMesh(const string &meshName)
 	if(!rc) {
 		cerr << errStr << endl;
 	} else {
+		origPosBuf = attrib.vertices;
 		posBuf = attrib.vertices;
 		norBuf = attrib.normals;
 		texBuf = attrib.texcoords;
@@ -73,6 +75,7 @@ void ShapeSkin::loadMesh(const string &meshName)
 				// Loop over vertices in the face.
 				for(size_t v = 0; v < fv; v++) {
 					// access to vertex
+					// cerr << "fv: " << fv << endl;
 					tinyobj::index_t idx = mesh.indices[index_offset + v];
 					elemBuf.push_back(idx.vertex_index);
 				}
@@ -86,7 +89,7 @@ void ShapeSkin::loadMesh(const string &meshName)
 
 void ShapeSkin::loadAttachment(const std::string &filename)
 {
-	int nverts, nbones;
+	// int nverts, nbones;
 	ifstream in;
 	in.open(filename);
 	if(!in.good()) {
@@ -101,7 +104,8 @@ void ShapeSkin::loadAttachment(const std::string &filename)
 	ss0 >> nverts;
 	ss0 >> nbones;
 	assert(nverts == posBuf.size()/3);
-	weightBuf = std::vector<std::vector<float > > (nverts);
+	// origPosBuf = posBuf;
+	weightBuf = std::vector<float> (nverts*nbones);
 	int idx = 0;
 	while(1) {
 		getline(in, line);
@@ -110,14 +114,15 @@ void ShapeSkin::loadAttachment(const std::string &filename)
 		}
 		
 		stringstream ss(line);
-		weightBuf.at(idx) = std::vector<float>(nbones);
+		// weightBuf.at(idx) = std::vector<float>(nbones);
 		for (int i = 0; i < nbones; ++i) {
-			ss >> weightBuf.at(idx).at(i);
+			ss >> weightBuf.at(idx*nbones + i);
 		}
 		idx++;
 	}
 
-	cout << "weightBuf.sz: " << weightBuf.size() << endl;
+	printf("weightBuf.sz: %d | weightBuf.size / 18: %d\n", weightBuf.size(), weightBuf.size() /nbones);
+	// cout << "weightBuf.sz: " << weightBuf.size() << endl;
 	// for (int i = 0; i < nverts; ++i) {
 	// 	for (int j = 0; j < nbones; ++j) {
 	// 		cout << weightBuf.at(i).at(j) << " ";
@@ -139,15 +144,15 @@ void ShapeSkin::loadSkeleton(const std::string &filename) {
 	getline(in, line); // comment 
 	getline(in, line);
 	stringstream ss0(line);
-	ss0 >> nverts;
+	ss0 >> nframes;
 	ss0 >> nbones;
 	printf("loading skeleton file: %s \n", filename.c_str());
-	printf("(verts, bones): (%d , %d)\n", nverts, nbones);
+	printf("(frames, bones): (%d , %d)\n", nframes, nbones);
 	
-	int nBones = 18;
-	vecTransforms = std::vector<std::vector<glm::mat4>>(nverts+2);
-	bindPoseNoInverse = vector<glm::mat4>(nBones);
-	bindPoseInverse = vector<glm::mat4>(nBones);
+	// int nBones = 18;
+	vecTransforms = std::vector<std::vector<glm::mat4>>(nframes+2);
+	bindPoseNoInverse = vector<glm::mat4>(nbones);
+	bindPoseInverse = vector<glm::mat4>(nbones);
 	int nLine = 0;
 	while (!in.eof()) {
 		getline(in, line);
@@ -156,7 +161,7 @@ void ShapeSkin::loadSkeleton(const std::string &filename) {
 		// printf("%s\n", string(line).c_str());
 		float qx, qy, qz, qw, px, py, pz;
 		// cerr << "nLine: " << nLine << " | " << endl;
-		for (int i = 0; i < nBones; ++i) {
+		for (int i = 0; i < nbones; ++i) {
 			ss >> qx;
 			ss >> qy;
 			ss >> qz;
@@ -177,7 +182,7 @@ void ShapeSkin::loadSkeleton(const std::string &filename) {
 			}
 			else {
 				// first bone
-				if (i == 0) vecTransforms.at(nLine-1) = std::vector<glm::mat4>(nBones);
+				if (i == 0) vecTransforms.at(nLine-1) = std::vector<glm::mat4>(nbones);
 				vecTransforms.at(nLine-1).at(i) = E;
 			}
 
@@ -196,9 +201,9 @@ void ShapeSkin::loadSkeleton(const std::string &filename) {
 void ShapeSkin::init()
 {
 	// Send the position array to the GPU
-	glGenBuffers(1, &posBufID);
-	glBindBuffer(GL_ARRAY_BUFFER, posBufID);
-	glBufferData(GL_ARRAY_BUFFER, posBuf.size()*sizeof(float), &posBuf[0], GL_STATIC_DRAW);
+	// glGenBuffers(1, &posBufID);
+	// glBindBuffer(GL_ARRAY_BUFFER, posBufID);
+	// glBufferData(GL_ARRAY_BUFFER, posBuf.size()*sizeof(float), &posBuf[0], GL_STATIC_DRAW);
 	
 	// Send the normal array to the GPU
 	glGenBuffers(1, &norBufID);
@@ -230,11 +235,52 @@ void ShapeSkin::drawBindPoseFrenetFrames(std::shared_ptr<MatrixStack> MV, float 
 
 }
 
+
 void ShapeSkin::drawAnimationFrenetFrames(std::shared_ptr<MatrixStack> MV, float t, bool debug, float len) {
 	// cerr << "t: " << t << endl;
-	float speed = 10.0f;
-	int idx = fmod(t, nbones) * speed;
-	// cerr << idx << endl;
+	
+
+
+	glGenBuffers(1, &posBufID);
+	glBindBuffer(GL_ARRAY_BUFFER, posBufID);
+	glBufferData(GL_ARRAY_BUFFER, posBuf.size()*sizeof(float), &posBuf[0], GL_DYNAMIC_DRAW);
+
+	// glGenBuffers(1, &origPosBufID);
+	// glBindBuffer(GL_ARRAY_BUFFER, origPosBufID);
+	// glBufferData(GL_ARRAY_BUFFER, origPosBuf.size()*sizeof(float), &origPosBuf[0], GL_DYNAMIC_DRAW);
+
+	float speed = 25.0f;
+	int idx = fmod(t * speed, nframes);
+	if (debug) {
+		printf("posBuf.size(): %d | posBuf.size / 3: %d\n", posBuf.size(), posBuf.size() /3);
+	}
+	
+	// cout << "posBuf.size(): " << posBuf.size() << endl;
+	for (int i = 0; i < posBuf.size() / 3; ++i) {
+		// cerr << "posBuf: " << i << endl;
+		float x, y, z;
+		x = origPosBuf.at(i * 3 + 0);
+		y = origPosBuf.at(i * 3 + 1);
+		z = origPosBuf.at(i * 3 + 2);
+		glm::vec4 x_i(x, y, z, 1.0f);
+		glm::vec4 result(0.0f, 0.0f, 0.0f, 1.0f);
+		for (int j = 0; j < nbones; j++) {
+			
+			glm::mat4 m_i = bindPoseInverse.at(j);
+			glm::mat4 m_0 = vecTransforms.at(idx).at(j);
+			float weight = weightBuf.at(i * nbones + j);
+			
+			glm::vec4 tmp = (weight * (m_0 * (m_i * x_i)));
+			result += tmp;
+		}
+		result[3] = 1.0f;
+		posBuf.at(i*3 +0) = result.x;
+		posBuf.at(i*3 +1) = result.y;
+		posBuf.at(i*3 +2) = result.z;
+	} 
+	if (debug) {
+
+	}
 	for (int i = 0; i < nbones; ++i) {
 		// cout << "i: " << i << endl;
 		drawPoint(MV, vecTransforms.at(idx).at(i), t, debug, len);
@@ -261,16 +307,6 @@ void ShapeSkin::drawPoint(std::shared_ptr<MatrixStack> MV, glm::mat4 E, float t,
 		glVertex3f(p.x, p.y , p.z);
 		glVertex3f(p.x, p.y, p.z+len);
 
-		if (debug) {
-			// cout << "i: " << i << endl;
-			printMat4(E);
-			printVec4(E[0]);
-			printVec4(E[1]);
-			printVec4(E[2]);
-			printVec4(E[3]);
-			cout << "p" << endl;
-			printVec4(p);
-		}
 
 	glEnd();
 	MV->popMatrix();
@@ -284,6 +320,11 @@ void ShapeSkin::draw() const
 	glEnableVertexAttribArray(h_pos);
 	glBindBuffer(GL_ARRAY_BUFFER, posBufID);
 	glVertexAttribPointer(h_pos, 3, GL_FLOAT, GL_FALSE, 0, (const void *)0);
+
+	// int skin_pos = prog->getAttribute("skinPos");
+	// glEnableVertexAttribArray(skin_pos);
+	// glBindBuffer(GL_ARRAY_BUFFER, origPosBufID);
+	// glVertexAttribPointer(skin_pos, 3, GL_FLOAT, GL_FALSE, 0, (const void *)0);
 	
 	int h_nor = prog->getAttribute("aNor");
 	glEnableVertexAttribArray(h_nor);
@@ -296,6 +337,7 @@ void ShapeSkin::draw() const
 	
 	glDisableVertexAttribArray(h_nor);
 	glDisableVertexAttribArray(h_pos);
+	// glDisableVertexAttribArray(skin_pos);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 }

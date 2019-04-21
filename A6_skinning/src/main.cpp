@@ -120,6 +120,7 @@ void init()
 	
 	progSkin->init();
 	progSkin->addAttribute("aPos");
+	progSkin->addAttribute("skinPos");
 	progSkin->addAttribute("aNor");
 	progSkin->addUniform("P");
 	progSkin->addUniform("MV");

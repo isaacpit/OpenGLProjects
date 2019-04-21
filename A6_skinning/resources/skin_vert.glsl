@@ -2,6 +2,7 @@
 
 attribute vec4 aPos;
 attribute vec3 aNor;
+attribute vec4 skinPos;
 
 uniform mat4 P;
 uniform mat4 MV;
