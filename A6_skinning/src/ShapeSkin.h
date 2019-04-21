@@ -44,6 +44,10 @@ private:
 	std::vector<float> origNorBuf;
 	std::vector<float> texBuf;
 	std::vector<float> weightBuf;
+	std::vector<std::vector<float> > nonZeroSkinWeightsBuf;
+	std::vector<std::vector<float> > nonZeroBoneIndicesBuf;
+	std::vector<float> nBoneInfluences;
+
 	unsigned elemBufID;
 	unsigned posBufID;
 	unsigned origPosBufID;

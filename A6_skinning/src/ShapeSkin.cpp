@@ -1,5 +1,6 @@
 #include <iostream>
 #include <fstream>
+#include <iomanip>
 
 #define GLM_FORCE_RADIANS
 #include <glm/glm.hpp>
@@ -107,6 +108,11 @@ void ShapeSkin::loadAttachment(const std::string &filename)
 	assert(nverts == posBuf.size()/3);
 	// origPosBuf = posBuf;
 	weightBuf = std::vector<float> (nverts*nbones);
+	nonZeroBoneIndicesBuf = std::vector<std::vector<float> >(nverts);
+	nonZeroSkinWeightsBuf = std::vector<std::vector<float> >(nverts);
+	nBoneInfluences = std::vector<float>(nverts);
+	int maxBoneInfluences = 16;
+	float thresh = .001;
 	int idx = 0;
 	while(1) {
 		getline(in, line);
@@ -116,10 +122,32 @@ void ShapeSkin::loadAttachment(const std::string &filename)
 		
 		stringstream ss(line);
 		// weightBuf.at(idx) = std::vector<float>(nbones);
+		nonZeroBoneIndicesBuf.at(idx) = std::vector<float>(maxBoneInfluences);
+		nonZeroSkinWeightsBuf.at(idx) = std::vector<float>(maxBoneInfluences);
+		int idx_nonZero = 0;
 		for (int i = 0; i < nbones; ++i) {
-			ss >> weightBuf.at(idx*nbones + i);
+			float wt;
+			ss >> wt;
+			weightBuf.at(idx*nbones + i) = wt;
+			if (wt > thresh) {
+				nonZeroSkinWeightsBuf.at(idx).at(idx_nonZero) = wt;
+				nonZeroBoneIndicesBuf.at(idx).at(idx_nonZero) = i;
+				idx_nonZero++;
+			}
 		}
+		nBoneInfluences.at(idx) = idx_nonZero;
 		idx++;
+	}
+
+	cerr << "BONE INDICES:" << endl;
+	for (int i = 0; i < nverts; ++i) {
+		cerr << "nBones: " << setw(3) << nBoneInfluences.at(i) << " | ";
+		for (int j = 0; j < maxBoneInfluences; ++j) {
+			cerr << setw(2) <<  nonZeroBoneIndicesBuf.at(i).at(j) << " ";
+		} cerr << " | ";
+		for (int j = 0; j < maxBoneInfluences; ++j) {
+			printf("%3.3f ", nonZeroSkinWeightsBuf.at(i).at(j));
+		} cerr << endl;
 	}
 
 	printf("weightBuf.sz: %d | weightBuf.size / 18: %d\n", weightBuf.size(), weightBuf.size() /nbones);
@@ -273,14 +301,27 @@ void ShapeSkin::drawAnimationFrenetFrames(std::shared_ptr<MatrixStack> MV, float
 		glm::vec4 n_i(nx, ny, nz, 0.0f);
 		glm::vec4 result_x(0.0f, 0.0f, 0.0f, 1.0f);
 		glm::vec4 result_n(0.0f, 0.0f, 0.0f, 1.0f);
-		for (int j = 0; j < nbones; j++) {
+		// for (int j = 0; j < nbones; j++) {
 			
+		// 	glm::mat4 m_i = bindPoseInverse.at(j);
+		// 	glm::mat4 m_0 = vecTransforms.at(idx).at(j);
+		// 	float weight = weightBuf.at(i * nbones + j);
+			
+		// 	glm::vec4 tmp_x = (weight * (m_0 * (m_i * x_i)));
+		// 	glm::vec4 tmp_n = (weight * (m_0 * (m_i * n_i)));
+		// 	result_x += tmp_x;
+		// 	result_n += tmp_n;
+		// }
+
+		for (int s = 0; s < nBoneInfluences.at(i); s++) {
+			int j = nonZeroBoneIndicesBuf.at(i).at(s);
+			float wt = nonZeroSkinWeightsBuf.at(i).at(s);
 			glm::mat4 m_i = bindPoseInverse.at(j);
 			glm::mat4 m_0 = vecTransforms.at(idx).at(j);
-			float weight = weightBuf.at(i * nbones + j);
+			// float weight = weightBuf.at(i * nbones + j);
 			
-			glm::vec4 tmp_x = (weight * (m_0 * (m_i * x_i)));
-			glm::vec4 tmp_n = (weight * (m_0 * (m_i * n_i)));
+			glm::vec4 tmp_x = (wt * (m_0 * (m_i * x_i)));
+			glm::vec4 tmp_n = (wt * (m_0 * (m_i * n_i)));
 			result_x += tmp_x;
 			result_n += tmp_n;
 		}
