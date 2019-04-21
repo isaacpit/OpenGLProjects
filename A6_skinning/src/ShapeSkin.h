@@ -41,6 +41,7 @@ private:
 	std::vector<float> posBuf;
 	std::vector<float> origPosBuf;
 	std::vector<float> norBuf;
+	std::vector<float> origNorBuf;
 	std::vector<float> texBuf;
 	std::vector<float> weightBuf;
 	unsigned elemBufID;

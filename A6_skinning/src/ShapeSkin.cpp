@@ -63,6 +63,7 @@ void ShapeSkin::loadMesh(const string &meshName)
 		origPosBuf = attrib.vertices;
 		posBuf = attrib.vertices;
 		norBuf = attrib.normals;
+		origNorBuf = attrib.normals;
 		texBuf = attrib.texcoords;
 		assert(posBuf.size() == norBuf.size());
 		// Loop over shapes
@@ -201,14 +202,14 @@ void ShapeSkin::loadSkeleton(const std::string &filename) {
 void ShapeSkin::init()
 {
 	// Send the position array to the GPU
-	// glGenBuffers(1, &posBufID);
+	glGenBuffers(1, &posBufID);
 	// glBindBuffer(GL_ARRAY_BUFFER, posBufID);
 	// glBufferData(GL_ARRAY_BUFFER, posBuf.size()*sizeof(float), &posBuf[0], GL_STATIC_DRAW);
 	
 	// Send the normal array to the GPU
 	glGenBuffers(1, &norBufID);
-	glBindBuffer(GL_ARRAY_BUFFER, norBufID);
-	glBufferData(GL_ARRAY_BUFFER, norBuf.size()*sizeof(float), &norBuf[0], GL_STATIC_DRAW);
+	// glBindBuffer(GL_ARRAY_BUFFER, norBufID);
+	// glBufferData(GL_ARRAY_BUFFER, norBuf.size()*sizeof(float), &norBuf[0], GL_STATIC_DRAW);
 
 	// No texture info
 	texBufID = 0;
@@ -239,7 +240,9 @@ void ShapeSkin::drawBindPoseFrenetFrames(std::shared_ptr<MatrixStack> MV, float 
 void ShapeSkin::drawAnimationFrenetFrames(std::shared_ptr<MatrixStack> MV, float t, bool debug, float len) {
 	// cerr << "t: " << t << endl;
 	
-
+	glGenBuffers(1, &norBufID);
+	glBindBuffer(GL_ARRAY_BUFFER, norBufID);
+	glBufferData(GL_ARRAY_BUFFER, norBuf.size()*sizeof(float), &norBuf[0], GL_STATIC_DRAW);
 
 	glGenBuffers(1, &posBufID);
 	glBindBuffer(GL_ARRAY_BUFFER, posBufID);
@@ -258,29 +261,41 @@ void ShapeSkin::drawAnimationFrenetFrames(std::shared_ptr<MatrixStack> MV, float
 	// cout << "posBuf.size(): " << posBuf.size() << endl;
 	for (int i = 0; i < posBuf.size() / 3; ++i) {
 		// cerr << "posBuf: " << i << endl;
-		float x, y, z;
-		x = origPosBuf.at(i * 3 + 0);
-		y = origPosBuf.at(i * 3 + 1);
-		z = origPosBuf.at(i * 3 + 2);
-		glm::vec4 x_i(x, y, z, 1.0f);
-		glm::vec4 result(0.0f, 0.0f, 0.0f, 1.0f);
+		float px, py, pz, nx, ny, nz;
+		px = origPosBuf.at(i * 3 + 0);
+		py = origPosBuf.at(i * 3 + 1);
+		pz = origPosBuf.at(i * 3 + 2);
+
+		nx = origNorBuf.at(i * 3 + 0);
+		ny = origNorBuf.at(i * 3 + 1);
+		nz = origNorBuf.at(i * 3 + 2);
+		glm::vec4 x_i(px, py, pz, 1.0f);
+		glm::vec4 n_i(nx, ny, nz, 0.0f);
+		glm::vec4 result_x(0.0f, 0.0f, 0.0f, 1.0f);
+		glm::vec4 result_n(0.0f, 0.0f, 0.0f, 1.0f);
 		for (int j = 0; j < nbones; j++) {
 			
 			glm::mat4 m_i = bindPoseInverse.at(j);
 			glm::mat4 m_0 = vecTransforms.at(idx).at(j);
 			float weight = weightBuf.at(i * nbones + j);
 			
-			glm::vec4 tmp = (weight * (m_0 * (m_i * x_i)));
-			result += tmp;
+			glm::vec4 tmp_x = (weight * (m_0 * (m_i * x_i)));
+			glm::vec4 tmp_n = (weight * (m_0 * (m_i * n_i)));
+			result_x += tmp_x;
+			result_n += tmp_n;
 		}
-		result[3] = 1.0f;
-		posBuf.at(i*3 +0) = result.x;
-		posBuf.at(i*3 +1) = result.y;
-		posBuf.at(i*3 +2) = result.z;
-	} 
-	if (debug) {
+		result_x[3] = 1.0f;
+		posBuf.at(i*3 +0) = result_x.x;
+		posBuf.at(i*3 +1) = result_x.y;
+		posBuf.at(i*3 +2) = result_x.z;
 
-	}
+		norBuf.at(i*3 +0) = result_n.x;
+		norBuf.at(i*3 +1) = result_n.y;
+		norBuf.at(i*3 +2) = result_n.z;
+
+
+	} 
+
 	for (int i = 0; i < nbones; ++i) {
 		// cout << "i: " << i << endl;
 		drawPoint(MV, vecTransforms.at(idx).at(i), t, debug, len);
