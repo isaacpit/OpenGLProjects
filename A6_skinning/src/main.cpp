@@ -31,6 +31,7 @@ shared_ptr<Camera> camera = NULL;
 shared_ptr<ShapeSkin> shape = NULL;
 shared_ptr<Program> progSimple = NULL;
 shared_ptr<Program> progSkin = NULL;
+shared_ptr<Program> progCalc = NULL;
 
 static void error_callback(int error, const char *description)
 {
@@ -98,6 +99,12 @@ void loadScene(const string &meshFile, const string &attachmentFile)
 	progSkin = make_shared<Program>();
 	progSkin->setShaderNames(RESOURCE_DIR + "skin_vert.glsl", RESOURCE_DIR + "skin_frag.glsl");
 	progSkin->setVerbose(true);
+
+	progCalc = make_shared<Program>();
+	progCalc->setShaderNames(RESOURCE_DIR + "calc_skin_vert.glsl", RESOURCE_DIR + "calc_skin_frag.glsl");
+	progCalc->setVerbose(true);
+
+
 }
 
 void init()
@@ -120,10 +127,27 @@ void init()
 	
 	progSkin->init();
 	progSkin->addAttribute("aPos");
-	progSkin->addAttribute("skinPos");
 	progSkin->addAttribute("aNor");
 	progSkin->addUniform("P");
 	progSkin->addUniform("MV");
+
+
+	progCalc->init();
+	progCalc->addAttribute("aPos");
+	progCalc->addAttribute("aNor");
+	progCalc->addAttribute("weights0");
+	progCalc->addAttribute("weights1");
+	progCalc->addAttribute("weights2");
+	progCalc->addAttribute("weights3");
+	progCalc->addAttribute("bones0");
+	progCalc->addAttribute("bones1");
+	progCalc->addAttribute("bones2");
+	progCalc->addAttribute("bones3");
+	progCalc->addAttribute("numInfl");
+	progCalc->addUniform("P");
+	progCalc->addUniform("MV");
+	progCalc->addUniform("animMat");
+	progCalc->addUniform("bindMatInv");
 	
 	// Initialize time.
 	glfwSetTime(0.0);
@@ -186,6 +210,8 @@ void render()
 	} else {
 		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 	}
+
+	bool CPU = !keyToggles[(unsigned)'g'];
 	
 	auto P = make_shared<MatrixStack>();
 	auto MV = make_shared<MatrixStack>();
@@ -203,23 +229,67 @@ void render()
 	
 	// progSimple->unbind();
 	// MV->popMatrix();
-
+	shared_ptr<Program> prog = (CPU) ? progSkin : progCalc;
+	
 	// Draw character
 	MV->pushMatrix();
-	progSkin->bind();
+	prog->bind();
 	MV->pushMatrix();
-	MV->scale(10, 10, 10);
+	// MV->scale();
 
+	int mx = (CPU) ? 2 : 5;
 	
-	glUniformMatrix4fv(progSkin->getUniform("P"), 1, GL_FALSE, glm::value_ptr(P->topMatrix()));
-	glUniformMatrix4fv(progSkin->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
-	MV->popMatrix();
-	shape->drawBindPoseFrenetFrames(MV, t, keyToggles[(unsigned)'d']);
-	shape->drawAnimationFrenetFrames(MV, t, keyToggles[(unsigned)'d']);
-	shape->setProgram(progSkin);
+	if (true) {
+		for (int i = 0; i < mx; ++i) {
+			for (int j = 0; j < mx; ++j) {
+				MV->pushMatrix();
+				MV->translate(2 * i, 0, 2 * j);
+				glUniformMatrix4fv(prog->getUniform("P"), 1, GL_FALSE, glm::value_ptr(P->topMatrix()));
+				glUniformMatrix4fv(prog->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
+				// if (!CPU) {
+				// 	// m = shape->sendAnimationMatrices(t)
+				// }
+
+				MV->popMatrix();
+
+				// if (CPU) shape->setProgram(progSkin);
+				// else shape->setProgram(progCalc);
+				shape->setProgram(prog);
+				if (!CPU) {
+
+				}
+				shape->drawBindPoseFrenetFrames(MV, t, keyToggles[(unsigned)'d'], .05);
+				shape->drawAnimationFrenetFrames(MV, t, keyToggles[(unsigned)'d'], .05, CPU);
+				
+				
+				shape->draw(CPU);
+			}
+			
+		}
+
+
+	}
+
+	// glUniformMatrix4fv(prog->getUniform("P"), 1, GL_FALSE, glm::value_ptr(P->topMatrix()));
+	// glUniformMatrix4fv(prog->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
+	// // if (!CPU) {
+	// // 	// m = shape->sendAnimationMatrices(t)
+	// // }
+
+	// MV->popMatrix();
+
+	// // if (CPU) shape->setProgram(progSkin);
+	// // else shape->setProgram(progCalc);
+	// shape->setProgram(prog);
+	// if (!CPU) {
+
+	// }
+	// shape->drawBindPoseFrenetFrames(MV, t, keyToggles[(unsigned)'d'], .05);
+	// shape->drawAnimationFrenetFrames(MV, t, keyToggles[(unsigned)'d'], .05, CPU);
 	
-	shape->draw();
-	progSkin->unbind();
+	
+	// shape->draw(CPU);
+	prog->unbind();
 	MV->popMatrix();
 
 	// Pop matrix stacks.

@@ -21,7 +21,7 @@ class Program;
 class ShapeSkin
 {
 public:
-	int nbones, nframes, nverts;
+	int nbones, nframes, nverts, maxBoneInfluences;
 
 	ShapeSkin();
 	virtual ~ShapeSkin();
@@ -30,11 +30,12 @@ public:
 	void loadSkeleton(const std::string &filename);
 	void setProgram(std::shared_ptr<Program> p) { prog = p; }
 	void init();
-	void draw() const;
+	void draw(bool) const;
 	void drawBindPoseFrenetFrames(std::shared_ptr<MatrixStack> MV, float t, bool debug = false, float len = .05);
-
-	void drawAnimationFrenetFrames(std::shared_ptr<MatrixStack> MV, float t, bool debug = false, float len = .05);
+	void drawAnimationFrenetFrames(std::shared_ptr<MatrixStack> MV, float t, bool debug = false, float len = .05, bool CPU = true);
 	
+	std::vector<glm::mat4> sendAnimationMatrices(int t);
+
 private:
 	std::shared_ptr<Program> prog;
 	std::vector<unsigned int> elemBuf;
@@ -44,8 +45,8 @@ private:
 	std::vector<float> origNorBuf;
 	std::vector<float> texBuf;
 	std::vector<float> weightBuf;
-	std::vector<std::vector<float> > nonZeroSkinWeightsBuf;
-	std::vector<std::vector<float> > nonZeroBoneIndicesBuf;
+	std::vector<float> nonZeroSkinWeightsBuf;
+	std::vector<float> nonZeroBoneIndicesBuf;
 	std::vector<float> nBoneInfluences;
 
 	unsigned elemBufID;
@@ -53,10 +54,15 @@ private:
 	unsigned origPosBufID;
 	unsigned norBufID;
 	unsigned texBufID;
+	unsigned weightsBufID;
+	unsigned boneIndicesBufID;
+	unsigned numInflID;
 
 	std::vector<std::vector<glm::mat4>> vecTransforms;
 	std::vector<glm::mat4> bindPoseNoInverse;
 	std::vector<glm::mat4> bindPoseInverse;
+
+	std::vector<glm::mat4> animationMatrices;
 
 	void drawPoint(std::shared_ptr<MatrixStack> MV, glm::mat4 E, float t , bool debug, float len);
 

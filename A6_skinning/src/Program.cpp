@@ -92,9 +92,20 @@ void Program::unbind()
 	glUseProgram(0);
 }
 
+// void Program::bindAttribute(const string &name) {
+// 	cerr << "attributes.size(): " << attributes.size() << endl;
+// 	glBindAttribLocation(pid, attributes.size(), name.c_str());
+
+// }
+
 void Program::addAttribute(const string &name)
 {
 	attributes[name] = glGetAttribLocation(pid, name.c_str());
+	cerr << "prog: " << this->name << endl;
+	for (auto const& pair: attributes) {
+		std::cout << "{" << pair.first << ": " << pair.second << "}\n";
+
+	}
 }
 
 void Program::addUniform(const string &name)
@@ -105,6 +116,7 @@ void Program::addUniform(const string &name)
 GLint Program::getAttribute(const string &name) const
 {
 	map<string,GLint>::const_iterator attribute = attributes.find(name.c_str());
+	// cerr << "(" << attribute->first << ", " << attribute->second << ")" << endl;
 	if(attribute == attributes.end()) {
 		if(isVerbose()) {
 			cout << name << " is not an attribute variable" << endl;

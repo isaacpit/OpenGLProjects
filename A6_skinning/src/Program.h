@@ -26,6 +26,7 @@ public:
 	virtual void unbind();
 
 	void addAttribute(const std::string &name);
+	// void bindAttribute(const std::string &name);
 	void addUniform(const std::string &name);
 	GLint getAttribute(const std::string &name) const;
 	GLint getUniform(const std::string &name) const;

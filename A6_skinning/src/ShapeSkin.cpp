@@ -9,6 +9,10 @@
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "tiny_obj_loader.h"
 
+#ifndef DEBUG
+#define DEBUG 0
+#endif
+
 #include "ShapeSkin.h"
 #include "GLSL.h"
 #include "Program.h"
@@ -42,7 +46,9 @@ ShapeSkin::ShapeSkin() :
 	posBufID(0),
 	norBufID(0),
 	texBufID(0),
-	origPosBufID(0)
+	origPosBufID(0),
+	weightsBufID(0),
+	boneIndicesBufID(0)
 {
 }
 
@@ -107,11 +113,17 @@ void ShapeSkin::loadAttachment(const std::string &filename)
 	ss0 >> nbones;
 	assert(nverts == posBuf.size()/3);
 	// origPosBuf = posBuf;
+	maxBoneInfluences = 16;
 	weightBuf = std::vector<float> (nverts*nbones);
-	nonZeroBoneIndicesBuf = std::vector<std::vector<float> >(nverts);
-	nonZeroSkinWeightsBuf = std::vector<std::vector<float> >(nverts);
+	nonZeroBoneIndicesBuf = std::vector<float>(nverts * maxBoneInfluences);
+	nonZeroSkinWeightsBuf = std::vector<float>(nverts * maxBoneInfluences);
 	nBoneInfluences = std::vector<float>(nverts);
-	int maxBoneInfluences = 16;
+
+	cerr << "nonZeroBoneIndicesBuf: " << (nonZeroBoneIndicesBuf.size() / maxBoneInfluences ) << endl;
+	cerr << "nonZeroSkinWeightsBuf: " << (nonZeroSkinWeightsBuf.size() / maxBoneInfluences) << endl;
+	cerr << "nBoneInfluences: " << (nBoneInfluences.size()) << endl;
+	cerr << "posBuf: " << (posBuf.size() / 3) << endl;
+
 	float thresh = .001;
 	int idx = 0;
 	while(1) {
@@ -122,16 +134,16 @@ void ShapeSkin::loadAttachment(const std::string &filename)
 		
 		stringstream ss(line);
 		// weightBuf.at(idx) = std::vector<float>(nbones);
-		nonZeroBoneIndicesBuf.at(idx) = std::vector<float>(maxBoneInfluences);
-		nonZeroSkinWeightsBuf.at(idx) = std::vector<float>(maxBoneInfluences);
+		// nonZeroBoneIndicesBuf.at(idx) = std::vector<float>(maxBoneInfluences);
+		// nonZeroSkinWeightsBuf.at(idx) = std::vector<float>(maxBoneInfluences);
 		int idx_nonZero = 0;
 		for (int i = 0; i < nbones; ++i) {
 			float wt;
 			ss >> wt;
 			weightBuf.at(idx*nbones + i) = wt;
 			if (wt > thresh) {
-				nonZeroSkinWeightsBuf.at(idx).at(idx_nonZero) = wt;
-				nonZeroBoneIndicesBuf.at(idx).at(idx_nonZero) = i;
+				nonZeroSkinWeightsBuf.at(idx*maxBoneInfluences + idx_nonZero) = wt;
+				nonZeroBoneIndicesBuf.at(idx*maxBoneInfluences + idx_nonZero) = i;
 				idx_nonZero++;
 			}
 		}
@@ -139,16 +151,18 @@ void ShapeSkin::loadAttachment(const std::string &filename)
 		idx++;
 	}
 
+	#if DEBUG
 	cerr << "BONE INDICES:" << endl;
 	for (int i = 0; i < nverts; ++i) {
 		cerr << "nBones: " << setw(3) << nBoneInfluences.at(i) << " | ";
 		for (int j = 0; j < maxBoneInfluences; ++j) {
-			cerr << setw(2) <<  nonZeroBoneIndicesBuf.at(i).at(j) << " ";
+			cerr << setw(2) <<  nonZeroBoneIndicesBuf.at(i*maxBoneInfluences + j) << " ";
 		} cerr << " | ";
 		for (int j = 0; j < maxBoneInfluences; ++j) {
-			printf("%3.3f ", nonZeroSkinWeightsBuf.at(i).at(j));
+			printf("%3.3f ", nonZeroSkinWeightsBuf.at(i*maxBoneInfluences + j));
 		} cerr << endl;
 	}
+	#endif
 
 	printf("weightBuf.sz: %d | weightBuf.size / 18: %d\n", weightBuf.size(), weightBuf.size() /nbones);
 	// cout << "weightBuf.sz: " << weightBuf.size() << endl;
@@ -239,6 +253,18 @@ void ShapeSkin::init()
 	// glBindBuffer(GL_ARRAY_BUFFER, norBufID);
 	// glBufferData(GL_ARRAY_BUFFER, norBuf.size()*sizeof(float), &norBuf[0], GL_STATIC_DRAW);
 
+	glGenBuffers(1, &weightsBufID);
+	glBindBuffer(GL_ARRAY_BUFFER, weightsBufID);
+	glBufferData(GL_ARRAY_BUFFER, nonZeroSkinWeightsBuf.size()*sizeof(float), &nonZeroSkinWeightsBuf[0], GL_STATIC_DRAW);
+
+	glGenBuffers(1, &boneIndicesBufID);
+	glBindBuffer(GL_ARRAY_BUFFER, boneIndicesBufID);
+	glBufferData(GL_ARRAY_BUFFER, nonZeroBoneIndicesBuf.size()*sizeof(float), &nonZeroBoneIndicesBuf[0], GL_STATIC_DRAW);
+
+	glGenBuffers(1, &numInflID);
+	glBindBuffer(GL_ARRAY_BUFFER, numInflID);
+	glBufferData(GL_ARRAY_BUFFER, nBoneInfluences.size()*sizeof(float), &nBoneInfluences[0], GL_STATIC_DRAW);
+
 	// No texture info
 	texBufID = 0;
 	
@@ -246,6 +272,8 @@ void ShapeSkin::init()
 	glGenBuffers(1, &elemBufID);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, elemBufID);
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, elemBuf.size()*sizeof(unsigned int), &elemBuf[0], GL_STATIC_DRAW);
+
+
 	
 	// Unbind the arrays
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -264,13 +292,20 @@ void ShapeSkin::drawBindPoseFrenetFrames(std::shared_ptr<MatrixStack> MV, float 
 
 }
 
+std::vector<glm::mat4> ShapeSkin::sendAnimationMatrices(int t) {
+	// glUniformMatrix4fv(h_m, 18, )
+	return vecTransforms.at(t);
+}
 
-void ShapeSkin::drawAnimationFrenetFrames(std::shared_ptr<MatrixStack> MV, float t, bool debug, float len) {
+// std::vector<glm::mat4> send
+
+
+void ShapeSkin::drawAnimationFrenetFrames(std::shared_ptr<MatrixStack> MV, float t, bool debug, float len, bool CPU) {
 	// cerr << "t: " << t << endl;
 	
 	glGenBuffers(1, &norBufID);
 	glBindBuffer(GL_ARRAY_BUFFER, norBufID);
-	glBufferData(GL_ARRAY_BUFFER, norBuf.size()*sizeof(float), &norBuf[0], GL_STATIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, norBuf.size()*sizeof(float), &norBuf[0], GL_DYNAMIC_DRAW);
 
 	glGenBuffers(1, &posBufID);
 	glBindBuffer(GL_ARRAY_BUFFER, posBufID);
@@ -280,69 +315,96 @@ void ShapeSkin::drawAnimationFrenetFrames(std::shared_ptr<MatrixStack> MV, float
 	// glBindBuffer(GL_ARRAY_BUFFER, origPosBufID);
 	// glBufferData(GL_ARRAY_BUFFER, origPosBuf.size()*sizeof(float), &origPosBuf[0], GL_DYNAMIC_DRAW);
 
-	float speed = 25.0f;
+	float speed = 100.0f;
 	int idx = fmod(t * speed, nframes);
 	if (debug) {
 		printf("posBuf.size(): %d | posBuf.size / 3: %d\n", posBuf.size(), posBuf.size() /3);
 	}
-	
-	// cout << "posBuf.size(): " << posBuf.size() << endl;
-	for (int i = 0; i < posBuf.size() / 3; ++i) {
-		// cerr << "posBuf: " << i << endl;
-		float px, py, pz, nx, ny, nz;
-		px = origPosBuf.at(i * 3 + 0);
-		py = origPosBuf.at(i * 3 + 1);
-		pz = origPosBuf.at(i * 3 + 2);
 
-		nx = origNorBuf.at(i * 3 + 0);
-		ny = origNorBuf.at(i * 3 + 1);
-		nz = origNorBuf.at(i * 3 + 2);
-		glm::vec4 x_i(px, py, pz, 1.0f);
-		glm::vec4 n_i(nx, ny, nz, 0.0f);
-		glm::vec4 result_x(0.0f, 0.0f, 0.0f, 1.0f);
-		glm::vec4 result_n(0.0f, 0.0f, 0.0f, 1.0f);
-		// for (int j = 0; j < nbones; j++) {
-			
-		// 	glm::mat4 m_i = bindPoseInverse.at(j);
-		// 	glm::mat4 m_0 = vecTransforms.at(idx).at(j);
-		// 	float weight = weightBuf.at(i * nbones + j);
-			
-		// 	glm::vec4 tmp_x = (weight * (m_0 * (m_i * x_i)));
-		// 	glm::vec4 tmp_n = (weight * (m_0 * (m_i * n_i)));
-		// 	result_x += tmp_x;
-		// 	result_n += tmp_n;
-		// }
+	if (CPU) {
+		for (int i = 0; i < posBuf.size() / 3; ++i) {
+			// cerr << "posBuf: " << i << endl;
+			float px, py, pz, nx, ny, nz;
+			px = origPosBuf.at(i * 3 + 0);
+			py = origPosBuf.at(i * 3 + 1);
+			pz = origPosBuf.at(i * 3 + 2);
 
-		for (int s = 0; s < nBoneInfluences.at(i); s++) {
-			int j = nonZeroBoneIndicesBuf.at(i).at(s);
-			float wt = nonZeroSkinWeightsBuf.at(i).at(s);
-			glm::mat4 m_i = bindPoseInverse.at(j);
-			glm::mat4 m_0 = vecTransforms.at(idx).at(j);
-			// float weight = weightBuf.at(i * nbones + j);
-			
-			glm::vec4 tmp_x = (wt * (m_0 * (m_i * x_i)));
-			glm::vec4 tmp_n = (wt * (m_0 * (m_i * n_i)));
-			result_x += tmp_x;
-			result_n += tmp_n;
+			nx = origNorBuf.at(i * 3 + 0);
+			ny = origNorBuf.at(i * 3 + 1);
+			nz = origNorBuf.at(i * 3 + 2);
+			glm::vec4 x_i(px, py, pz, 1.0f);
+			glm::vec4 n_i(nx, ny, nz, 0.0f);
+			glm::vec4 result_x(0.0f, 0.0f, 0.0f, 1.0f);
+			glm::vec4 result_n(0.0f, 0.0f, 0.0f, 1.0f);
+			// for (int j = 0; j < nbones; j++) {
+				
+			// 	glm::mat4 m_i = bindPoseInverse.at(j);
+			// 	glm::mat4 m_0 = vecTransforms.at(idx).at(j);
+			// 	float weight = weightBuf.at(i * nbones + j);
+				
+			// 	glm::vec4 tmp_x = (weight * (m_0 * (m_i * x_i)));
+			// 	glm::vec4 tmp_n = (weight * (m_0 * (m_i * n_i)));
+			// 	result_x += tmp_x;
+			// 	result_n += tmp_n;
+			// }
+
+			for (int s = 0; s < nBoneInfluences.at(i); s++) {
+				int j = nonZeroBoneIndicesBuf.at(i*maxBoneInfluences + s);
+				float wt = nonZeroSkinWeightsBuf.at(i*maxBoneInfluences + s);
+				glm::mat4 m_i = bindPoseInverse.at(j);
+				glm::mat4 m_0 = vecTransforms.at(idx).at(j);
+				// float weight = weightBuf.at(i * nbones + j);
+				
+				glm::vec4 tmp_x = (wt * (m_0 * (m_i * x_i)));
+				glm::vec4 tmp_n = (wt * (m_0 * (m_i * n_i)));
+				result_x += tmp_x;
+				result_n += tmp_n;
+			}
+			result_x[3] = 1.0f;
+			posBuf.at(i*3 +0) = result_x.x;
+			posBuf.at(i*3 +1) = result_x.y;
+			posBuf.at(i*3 +2) = result_x.z;
+
+			norBuf.at(i*3 +0) = result_n.x;
+			norBuf.at(i*3 +1) = result_n.y;
+			norBuf.at(i*3 +2) = result_n.z;
+
+		} 
+
+		for (int i = 0; i < nbones; ++i) {
+			// cout << "i: " << i << endl;
+			drawPoint(MV, vecTransforms.at(idx).at(i), t, debug, len);
 		}
-		result_x[3] = 1.0f;
-		posBuf.at(i*3 +0) = result_x.x;
-		posBuf.at(i*3 +1) = result_x.y;
-		posBuf.at(i*3 +2) = result_x.z;
+		
+		glLineWidth(1);
+	}
+	else {
+		posBuf = origPosBuf;
+		norBuf = origNorBuf;
 
-		norBuf.at(i*3 +0) = result_n.x;
-		norBuf.at(i*3 +1) = result_n.y;
-		norBuf.at(i*3 +2) = result_n.z;
+		int h_anim = prog->getUniform("animMat");
+		int h_bind = prog->getUniform("bindMatInv");
+		std::vector<glm::mat4> animMat = sendAnimationMatrices(idx);
+		if (debug) {
+			cerr << "anim: " << endl;
+			for (int i = 0; i < 18; ++i) {
+				printMat4(animMat.at(i));
+			}
+			cerr << "bind: " << endl;
+			for (int j = 0; j < 18; ++j) {
+				printMat4(bindPoseInverse.at(j));
+			}
+		}
+
+		glUniformMatrix4fv(h_anim, 18, GL_FALSE, glm::value_ptr(animMat[0]));
+		glUniformMatrix4fv(h_bind, 18, GL_FALSE, glm::value_ptr(bindPoseInverse[0]));
 
 
-	} 
 
-	for (int i = 0; i < nbones; ++i) {
-		// cout << "i: " << i << endl;
-		drawPoint(MV, vecTransforms.at(idx).at(i), t, debug, len);
 	}
 	
-	glLineWidth(1);
+	// cout << "posBuf.size(): " << posBuf.size() << endl;
+	
 
 }
 
@@ -368,7 +430,7 @@ void ShapeSkin::drawPoint(std::shared_ptr<MatrixStack> MV, glm::mat4 E, float t,
 	MV->popMatrix();
 }
 
-void ShapeSkin::draw() const
+void ShapeSkin::draw(bool CPU) const
 {
 	assert(prog);
 	
@@ -376,6 +438,58 @@ void ShapeSkin::draw() const
 	glEnableVertexAttribArray(h_pos);
 	glBindBuffer(GL_ARRAY_BUFFER, posBufID);
 	glVertexAttribPointer(h_pos, 3, GL_FLOAT, GL_FALSE, 0, (const void *)0);
+
+	int h_buf0;
+	int h_buf1;
+	int h_buf2;
+	int h_buf3;
+	int h_infl;
+
+	int h_bon0;
+	int h_bon1;
+	int h_bon2;
+	int h_bon3;
+
+	if (CPU) {
+		
+	}
+	else {
+		h_infl = prog->getAttribute("numInfl");
+		glEnableVertexAttribArray(h_infl);
+		glBindBuffer(GL_ARRAY_BUFFER, numInflID);
+		glVertexAttribPointer(h_infl, 1, GL_FLOAT, GL_FALSE, 0, (const void *)0);
+
+		h_bon0 = prog->getAttribute("bones0");
+		h_bon1 = prog->getAttribute("bones1");
+		h_bon2 = prog->getAttribute("bones2");
+		h_bon3 = prog->getAttribute("bones3");
+		glEnableVertexAttribArray(h_bon0);
+		glEnableVertexAttribArray(h_bon1);
+		glEnableVertexAttribArray(h_bon2);
+		glEnableVertexAttribArray(h_bon3);
+		glBindBuffer(GL_ARRAY_BUFFER, boneIndicesBufID);
+		unsigned stride = 16*sizeof(float);
+		glVertexAttribPointer(h_bon0, 4, GL_FLOAT, GL_FALSE, stride, (const void *)( 0*sizeof(float)));
+		glVertexAttribPointer(h_bon1, 4, GL_FLOAT, GL_FALSE, stride, (const void *)( 4*sizeof(float)));
+		glVertexAttribPointer(h_bon2, 4, GL_FLOAT, GL_FALSE, stride, (const void *)( 8*sizeof(float)));
+		glVertexAttribPointer(h_bon3, 4, GL_FLOAT, GL_FALSE, stride, (const void *)(12*sizeof(float)));
+
+		h_buf0 = prog->getAttribute("weights0");
+		h_buf1 = prog->getAttribute("weights1");
+		h_buf2 = prog->getAttribute("weights2");
+		h_buf3 = prog->getAttribute("weights3");
+		glEnableVertexAttribArray(h_buf0);
+		glEnableVertexAttribArray(h_buf1);
+		glEnableVertexAttribArray(h_buf2);
+		glEnableVertexAttribArray(h_buf3);
+		glBindBuffer(GL_ARRAY_BUFFER, weightsBufID);
+		// unsigned stride = 16*sizeof(float);
+		glVertexAttribPointer(h_buf0, 4, GL_FLOAT, GL_FALSE, stride, (const void *)( 0*sizeof(float)));
+		glVertexAttribPointer(h_buf1, 4, GL_FLOAT, GL_FALSE, stride, (const void *)( 4*sizeof(float)));
+		glVertexAttribPointer(h_buf2, 4, GL_FLOAT, GL_FALSE, stride, (const void *)( 8*sizeof(float)));
+		glVertexAttribPointer(h_buf3, 4, GL_FLOAT, GL_FALSE, stride, (const void *)(12*sizeof(float)));
+	}
+	
 
 	// int skin_pos = prog->getAttribute("skinPos");
 	// glEnableVertexAttribArray(skin_pos);
@@ -393,6 +507,26 @@ void ShapeSkin::draw() const
 	
 	glDisableVertexAttribArray(h_nor);
 	glDisableVertexAttribArray(h_pos);
+
+	if (CPU) {
+		
+	}
+	else {
+		// bone indices
+		glDisableVertexAttribArray(h_bon0);
+		glDisableVertexAttribArray(h_bon1);
+		glDisableVertexAttribArray(h_bon2);
+		glDisableVertexAttribArray(h_bon3);
+
+		// weight buffer
+		glDisableVertexAttribArray(h_buf0);
+		glDisableVertexAttribArray(h_buf1);
+		glDisableVertexAttribArray(h_buf2);
+		glDisableVertexAttribArray(h_buf3);
+
+		glDisableVertexAttribArray(h_infl);
+	}
+
 	// glDisableVertexAttribArray(skin_pos);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
