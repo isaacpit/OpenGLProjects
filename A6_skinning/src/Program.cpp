@@ -101,9 +101,9 @@ void Program::unbind()
 void Program::addAttribute(const string &name)
 {
 	attributes[name] = glGetAttribLocation(pid, name.c_str());
-	cerr << "prog: " << this->name << endl;
+	// cerr << "prog: " << this->name << endl;
 	for (auto const& pair: attributes) {
-		std::cout << "{" << pair.first << ": " << pair.second << "}\n";
+		// std::cout << "{" << pair.first << ": " << pair.second << "}\n";
 
 	}
 }

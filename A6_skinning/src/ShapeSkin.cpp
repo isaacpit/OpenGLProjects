@@ -119,10 +119,10 @@ void ShapeSkin::loadAttachment(const std::string &filename)
 	nonZeroSkinWeightsBuf = std::vector<float>(nverts * maxBoneInfluences);
 	nBoneInfluences = std::vector<float>(nverts);
 
-	cerr << "nonZeroBoneIndicesBuf: " << (nonZeroBoneIndicesBuf.size() / maxBoneInfluences ) << endl;
-	cerr << "nonZeroSkinWeightsBuf: " << (nonZeroSkinWeightsBuf.size() / maxBoneInfluences) << endl;
-	cerr << "nBoneInfluences: " << (nBoneInfluences.size()) << endl;
-	cerr << "posBuf: " << (posBuf.size() / 3) << endl;
+	// cerr << "nonZeroBoneIndicesBuf: " << (nonZeroBoneIndicesBuf.size() / maxBoneInfluences ) << endl;
+	// cerr << "nonZeroSkinWeightsBuf: " << (nonZeroSkinWeightsBuf.size() / maxBoneInfluences) << endl;
+	// cerr << "nBoneInfluences: " << (nBoneInfluences.size()) << endl;
+	// cerr << "posBuf: " << (posBuf.size() / 3) << endl;
 
 	float thresh = .001;
 	int idx = 0;
@@ -164,13 +164,8 @@ void ShapeSkin::loadAttachment(const std::string &filename)
 	}
 	#endif
 
-	printf("weightBuf.sz: %d | weightBuf.size / 18: %d\n", weightBuf.size(), weightBuf.size() /nbones);
-	// cout << "weightBuf.sz: " << weightBuf.size() << endl;
-	// for (int i = 0; i < nverts; ++i) {
-	// 	for (int j = 0; j < nbones; ++j) {
-	// 		cout << weightBuf.at(i).at(j) << " ";
-	// 	} cout << endl;
-	// }
+	// printf("weightBuf.sz: %d | weightBuf.size / 18: %d\n", weightBuf.size(), weightBuf.size() /nbones);
+	
 	in.close();
 }
 
@@ -230,7 +225,9 @@ void ShapeSkin::loadSkeleton(const std::string &filename) {
 			}
 
 			if (((nLine == 1) || (nLine == 0)) && i == 0) {
+				#if DEBUG 
 				printMat4(E);
+				#endif 
 			}
 		}
 		// cerr << endl;

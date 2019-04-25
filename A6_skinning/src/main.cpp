@@ -160,16 +160,16 @@ void loadScene(const string &meshFile, const string &attachmentFile)
 
 	int mx = (maxGPU > maxCPU) ? maxGPU : maxCPU;
 	shapeMode = vector<vector<int>>(mx);
-	cerr << "# shapes: " << nShapes << endl;
+	// cerr << "# shapes: " << nShapes << endl;
 	for (int i = 0; i < mx; ++i)
 	{
 		shapeMode.at(i) = vector<int>(mx);
 		for (int j = 0; j < mx; ++j)
 		{
 			shapeMode.at(i).at(j) = rand() % nShapes;
-			cerr << shapeMode.at(i).at(j) << " ";
+			// cerr << shapeMode.at(i).at(j) << " ";
 		}
-		cerr << endl;
+		// cerr << endl;
 	}
 }
 
@@ -224,6 +224,31 @@ void init()
 	glfwSetTime(0.0);
 
 	GLSL::checkError(GET_FILE_LINE);
+}
+
+void drawShapes(shared_ptr<MatrixStack> MV, shared_ptr<MatrixStack> P, shared_ptr<Program> prog, int mx, float t,  bool CPU) {
+	for (int i = 0; i < mx; ++i)
+	{
+		for (int j = 0; j < mx; ++j)
+		{
+			MV->pushMatrix();
+			MV->translate(-2 * (float)mx/(float)2, 0, -2 * (float)mx/(float)2);
+			MV->translate(2 * i, 0, 2 * j);
+			glUniformMatrix4fv(prog->getUniform("P"), 1, GL_FALSE, glm::value_ptr(P->topMatrix()));
+			glUniformMatrix4fv(prog->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
+			// if (!CPU) {
+			// 	// m = shape->sendAnimationMatrices(t)
+			// }
+
+			MV->popMatrix();
+			auto currShape = allShapes.at(shapeMode.at(i).at(j));
+			currShape->setProgram(prog);
+			// currShape->drawBindPoseFrenetFrames(MV, t, keyToggles[(unsigned)'d'], .05);
+			currShape->drawAnimationFrenetFrames(MV, t, keyToggles[(unsigned)'d'], .05, CPU);
+			currShape->draw(CPU);
+			
+		}
+	}
 }
 
 void drawGrid(shared_ptr<MatrixStack> MV, shared_ptr<MatrixStack> P, float t)
@@ -318,62 +343,9 @@ void render()
 
 	int mx = (CPU) ? maxCPU : maxGPU;
 
-	for (int i = 0; i < mx; ++i)
-	{
-		for (int j = 0; j < mx; ++j)
-		{
-			MV->pushMatrix();
-			MV->translate(-2 * (float)mx/(float)2, 0, -2 * (float)mx/(float)2);
-			MV->translate(2 * i, 0, 2 * j);
-			glUniformMatrix4fv(prog->getUniform("P"), 1, GL_FALSE, glm::value_ptr(P->topMatrix()));
-			glUniformMatrix4fv(prog->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
-			// if (!CPU) {
-			// 	// m = shape->sendAnimationMatrices(t)
-			// }
-
-			MV->popMatrix();
-			auto currShape = allShapes.at(shapeMode.at(i).at(j));
-			currShape->setProgram(prog);
-			currShape->drawBindPoseFrenetFrames(MV, t, keyToggles[(unsigned)'d'], .05);
-			currShape->drawAnimationFrenetFrames(MV, t, keyToggles[(unsigned)'d'], .05, CPU);
-			currShape->draw(CPU);
-			// if (CPU) shape->setProgram(progSkin);
-			// else shape->setProgram(progCalc);
-			// printf("(i, j): (%d, %d) \n", i, j);
-			// if (shapeMode.at(i).at(j) == 0)
-			// {
-			// 	shape0->setProgram(prog);
-			// 	shape0->drawBindPoseFrenetFrames(MV, t, keyToggles[(unsigned)'d'], .05);
-			// 	shape0->drawAnimationFrenetFrames(MV, t, keyToggles[(unsigned)'d'], .05, CPU);
-			// 	shape0->draw(CPU);
-			// }
-			// else if (shapeMode.at(i).at(j) == 1)
-			// {
-			// 	shape1->setProgram(prog);
-			// 	shape1->drawBindPoseFrenetFrames(MV, t, keyToggles[(unsigned)'d'], .05);
-			// 	shape1->drawAnimationFrenetFrames(MV, t, keyToggles[(unsigned)'d'], .05, CPU);
-			// 	shape1->draw(CPU);
-			// }
-		}
-	}
-	// glUniformMatrix4fv(prog->getUniform("P"), 1, GL_FALSE, glm::value_ptr(P->topMatrix()));
-	// glUniformMatrix4fv(prog->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
-	// // if (!CPU) {
-	// // 	// m = shape->sendAnimationMatrices(t)
-	// // }
-
-	// MV->popMatrix();
-
-	// // if (CPU) shape->setProgram(progSkin);
-	// // else shape->setProgram(progCalc);
-	// shape->setProgram(prog);
-	// if (!CPU) {
-
-	// }
-	// shape->drawBindPoseFrenetFrames(MV, t, keyToggles[(unsigned)'d'], .05);
-	// shape->drawAnimationFrenetFrames(MV, t, keyToggles[(unsigned)'d'], .05, CPU);
-
-	// shape->draw(CPU);
+	drawShapes(MV, P, prog, mx, t, CPU);
+	
+	
 	prog->unbind();
 	MV->popMatrix();
 
