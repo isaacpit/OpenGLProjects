@@ -26,6 +26,7 @@ void main()
 {
 
   vec4 calcPos = vec4(0, 0, 0, 1.0f);
+  vec4 calcNor = vec4(0, 0, 0, 0.0f);
   for (int j = 0; j < numInfl; ++j) {
     float f_j = float(j);
     int k;
@@ -48,12 +49,13 @@ void main()
       k = int(bones3[i_j]);
       wt = weights3[i_j];
     }
-    
+    calcNor += wt * (animMat[k] * (bindMatInv[k] * vec4(aNor, 0.0f)));
     calcPos += wt * (animMat[k] * (bindMatInv[k] * aPos));
   }
   calcPos[3] = 1.0f;
+  calcNor[3] = 0.0f;
 	gl_Position =  P * (MV * (calcPos)) ;
 
-  vColor = aNor * 0.5;
+  vColor = vec3(calcNor) * 0.5;
   
 }

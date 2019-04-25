@@ -402,9 +402,6 @@ void ShapeSkin::drawAnimationFrenetFrames(std::shared_ptr<MatrixStack> MV, float
 
 
 	}
-	
-	// cout << "posBuf.size(): " << posBuf.size() << endl;
-	
 
 }
 
