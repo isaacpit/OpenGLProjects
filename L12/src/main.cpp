@@ -224,6 +224,10 @@ void render()
 	glm::vec3 p1( 1.0f, 0.0f, 0.0f);
 	glm::vec3 p_i = (1-alpha) * p0 + alpha * p1;
 
+	glm::mat4 R0 = glm::mat4_cast(q0);
+	glm::mat4 R1 = glm::mat4_cast(q1);
+	glm::mat4 R_i = glm::mat4_cast(glm::normalize((1.0f - alpha)*q0 + alpha*q1));
+
 	// Draw the bunny three times: left, right, and interpolated.
 	// left:  use p0 for position and q0 for orientation
 	// right: use p1 for position and q1 for orientation
@@ -234,7 +238,7 @@ void render()
 	// LEFT
 	MV->pushMatrix();
 	MV->translate(p0);
-	MV->multMatrix(E0);
+	MV->multMatrix(R0);
 	glUniformMatrix4fv(progNormal->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
 	MV->popMatrix();
 	bunny->draw(progNormal);
@@ -242,7 +246,7 @@ void render()
 	// RIGHT
 	MV->pushMatrix();
 	MV->translate(p1);
-	MV->multMatrix(E1);
+	MV->multMatrix(R1);
 	glUniformMatrix4fv(progNormal->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
 	MV->popMatrix();
 	bunny->draw(progNormal);
@@ -250,7 +254,7 @@ void render()
 	// INTERPOLATED
 	MV->pushMatrix();
 	MV->translate(p_i);
-	MV->multMatrix(R);
+	MV->multMatrix(R_i);
 	glUniformMatrix4fv(progNormal->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
 	MV->popMatrix();
 	bunny->draw(progNormal);
