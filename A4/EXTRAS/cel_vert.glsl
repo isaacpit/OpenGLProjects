@@ -3,6 +3,11 @@
 uniform mat4 P;
 uniform mat4 MV;
 
+// uniform vec4 c1;
+// uniform vec4 c2;
+// uniform vec4 c3;
+// uniform vec4 c4;
+
 attribute vec4 aPos; // in object space
 attribute vec3 aNor; // in object space
 

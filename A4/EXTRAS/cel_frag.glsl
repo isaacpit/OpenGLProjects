@@ -16,6 +16,8 @@ varying vec4 fragPos_camera;
 void main()
 {
 	vec4 n = normalize(normal); // normal in camera space 
+	vec3 color2 = 0.5 * vec3(n.x + 1.0, n.y + 1.0, n.z + 1.0);
+	gl_FragColor = vec4(color2.r, color2.g, color2.b, 1.0);
 
   vec4 camera_camera = vec4(0.0, 0.0, 0.0, 0.0);
   vec4 e = camera_camera - fragPos_camera;
@@ -43,5 +45,6 @@ void main()
     color = c4;
   }
 	gl_FragColor = color;
+  // gl_FragColor = vec4(0.4, 0.2, 0.2, 1.0);
 
 }

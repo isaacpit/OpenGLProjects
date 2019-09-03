@@ -428,6 +428,57 @@ void drawFrenetFrame(vec3 v, shared_ptr<MatrixStack> MV, shared_ptr<MatrixStack>
 	// progSimple->unbind();
 }
 
+void drawMovingFrenetFrame(shared_ptr<MatrixStack> MV, shared_ptr<MatrixStack> P, vec4 p_i, vec4 p_1, vec4 p_2, float len = 0.5f) {
+	if (frenetframesMode == DRAW_FRENET) {
+		for (int i = 0; i < cps.size(); ++i) {
+			drawFrenetFrame(cps.at(i).first, MV, P, len);
+		}
+
+		// draw moving frenet frame
+		vec4 cross_p1_p2 = vec4(glm::cross(vec3(p_1), vec3(p_2)), 0.0f);
+
+		vec4 tangent = p_1 / glm::length(p_1); // T(u) = p'(u) / ||p'(u)||
+		vec4 binorm = cross_p1_p2 / glm::length(cross_p1_p2); // B(u) = p'(u) x p''(u) / ||p'(u) x p''(u)||
+		vec4 normal = vec4(glm::cross(vec3(tangent), vec3(binorm)), 0.0f); // N(u) = T(u) x B(u)
+
+		float magnitudeOfLines = 0.25f;
+		glLineWidth(5.0f);
+
+		// tangent
+		glColor3f(1.0f, 0.0f, 0.0f);
+		glBegin(GL_LINE_STRIP);
+
+		vec4 tan_p0 = p_i + 0.0f * tangent;
+		glVertex3f(tan_p0.x, tan_p0.y, tan_p0.z);
+		vec4 tan_p1 = p_i + magnitudeOfLines * tangent;
+		glVertex3f(tan_p1.x, tan_p1.y, tan_p1.z);
+		glEnd();
+
+		// binorm
+		glColor3f(0.0f, 0.0f, 1.0f);
+		glBegin(GL_LINE_STRIP);
+
+		vec4 binorm_p0 = p_i + 0.0f * binorm;
+		glVertex3f(binorm_p0.x, binorm_p0.y, binorm_p0.z);
+		vec4 binorm_p1 = p_i + magnitudeOfLines * binorm;
+		glVertex3f(binorm_p1.x, binorm_p1.y, binorm_p1.z);
+		glEnd();
+
+		// normal
+		glColor3f(0.0f, 1.0f, 0.0f);
+		glBegin(GL_LINE_STRIP);
+
+		vec4 norm_p0 = p_i + 0.0f * normal;
+		glVertex3f(norm_p0.x, norm_p0.y, norm_p0.z);
+		vec4 norm_p1 = p_i + magnitudeOfLines * normal;
+		glVertex3f(norm_p1.x, norm_p1.y, norm_p1.z);
+		glEnd();
+
+
+		glLineWidth(1);
+	}
+}
+
 void printTable(vector<std::pair<float, float> > t) {
 	for (int i = 0; i < t.size(); ++i) {
 		printf("% 6.3f %10.5f \n", t[i].first, t[i].second);	
@@ -805,6 +856,185 @@ static void init()
 	GLSL::checkError(GET_FILE_LINE);
 }
 
+void calculateRotation(mat4 &rotMat, mat4 &G, mat4* B, vec4 uVec0, int idx, float u0_1, vec3 p_i) {
+
+
+	if (quatMode == CALC_QUAT) {
+
+		vec4 g0 = vec4(cps.at(idx).second.x, cps.at(idx).second.y, cps.at(idx).second.z, cps.at(idx).second.w);
+		vec4 g1 = vec4(cps.at(idx+1).second.x, cps.at(idx+1).second.y, cps.at(idx+1).second.z, cps.at(idx+1).second.w);
+		vec4 g2 = vec4(cps.at(idx+2).second.x, cps.at(idx+2).second.y, cps.at(idx+2).second.z, cps.at(idx+2).second.w);
+		vec4 g3 = vec4(cps.at(idx+3).second.x, cps.at(idx+3).second.y, cps.at(idx+3).second.z, cps.at(idx+3).second.w);
+		
+		G = mat4(g0, g1, g2, g3);
+		if (keyToggles['d']) {
+			cout << "B4: " << endl;
+			printMat4(G);
+		}
+		
+		for (int i = 0; i < 3; ++i) {
+			float dot_prod = glm::dot(G[i], G[i+1]) ;
+			if (keyToggles['d']) {
+				cout << i << " dot: " << dot_prod << endl;;
+			}
+			if (twirlFix == TWIRL_FIX) {
+				if (dot_prod< 0) {
+					G[i+1] = - G[i+1];
+				}
+			}
+
+		}
+		if (keyToggles['d']) {
+			cout << "AFTER: " << endl;
+			printMat4(G);
+		}
+		vec4 qVec = G*(* B * uVec0);
+		quat q_test(qVec[3], qVec[0], qVec[1], qVec[2]);
+		rotMat = glm::mat4_cast(glm::normalize(q_test)); // Creates a rotation matrix
+		rotMat[3] = glm::vec4(p_i.x, p_i.y, p_i.z, 1.0f); // Puts 'p', which is a vec3 that represents the position, into the last column
+
+	}
+	else if (quatMode == LERP_QUAT) {
+		int prev_idx = idx+1;
+		int curr_idx = prev_idx + 1;
+		quat q = (1.0f - u0_1) * cps.at(prev_idx).second + u0_1 * cps.at(curr_idx).second;
+		rotMat = glm::mat4_cast(glm::normalize(q));
+		rotMat[3] = glm::vec4(p_i.x, p_i.y, p_i.z, 1.0f);
+		
+		if (keyToggles[(unsigned)'d']) {
+			printf("//////////////\n");
+			printf("idx %d | %6.3f %6.3f %6.3f %6.3f\n", prev_idx, q.x, q.y, q.z);
+			for (int i = 0; i < cps.size(); ++i) {
+				printf("i %d | %6.3f %6.3f %6.3f %6.3f\n", i, cps.at(i).second.x, cps.at(i).second.y, cps.at(i).second.z);
+			}
+		}
+	}
+	else {
+		cerr << "ERROR: bad quat mode" << endl;
+	}
+}
+
+void manipulateCamera(shared_ptr<MatrixStack> MV, mat4 &E) {
+	if (cameraMode == MOUSE_CAMERA) {
+		camera->applyViewMatrix(MV);
+	}
+	else if (cameraMode == FOLLOW_HELICOPTER_THIRD || cameraMode == FOLLOW_HELICOPTER_FIRST) {
+		vec3 firstPersonOffset(0.0f, 0.1f, 0.0f);
+		vec3 thirdPersonOffset(0.0f, 0.0f, 2.0f);
+		MV->pushMatrix();
+
+		MV->multMatrix(E);
+		if (cameraMode == FOLLOW_HELICOPTER_THIRD) {
+			MV->rotate(90.0f /180.0f * M_PI, vec3(0.0f, 1.0f, 0.0f)); // rotate 90 degrees on y axis to face forward
+			MV->translate(thirdPersonOffset);
+		}
+		else if (cameraMode == FOLLOW_HELICOPTER_FIRST) { 
+			MV->rotate(90.0f /180.0f * M_PI, vec3(0.0f, 1.0f, 0.0f)); // rotate 90 degrees on y axis to face forward
+			MV->translate(firstPersonOffset);
+		}
+
+		mat4 invMat = glm::inverse(MV->topMatrix());
+		MV->popMatrix();
+		MV->multMatrix(invMat);
+	}
+	else {
+		cerr << "Error: undefined camera control mode." << endl;
+	}
+}
+
+void drawSpline(mat4 &G, mat4* B) {
+	if (drawSplineMode == DRAW_SPLINE) {
+		glColor3f(0.0f, 0.0f, 1.0f);
+		if (cps.size() >= 4) {
+		// drawing curves between points
+			glLineWidth(1.0f);
+			for (int i = 0; i < cps.size()-3; ++i){
+				glBegin(GL_LINE_STRIP);
+				G[0] = glm::vec4(cps[i].first, 0.0f);
+				G[1] = glm::vec4(cps[i+1].first, 0.0f);
+				G[2] = glm::vec4(cps[i+2].first, 0.0f);
+				G[3] = glm::vec4(cps[i+3].first, 0.0f);
+
+				for(float u0 = 0.0f; u0 < 1.0f; u0+=0.01f) {
+					// Fill in uVec
+					glm::vec4 uVec(1.0f, u0, u0*u0, u0*u0*u0);
+					// Compute position at u
+					glm::vec4 p = G*(*B*uVec);
+
+					glVertex3f(p.x, p.y, p.z);
+				}
+				glEnd();
+			}
+		}
+	}
+}
+
+void drawPointsOnSpline(mat4* B) {
+	if((drawEqualPoints == DRAW_EQUAL_POINTS) && !usTable.empty()) {
+			float ds = 0.2;
+			if (arcParamMode == GAUSS_QUAD_MODE) {
+				glColor3f(0.0f, 0.0f, 1.0f);
+			}
+			else {
+				glColor3f(1.0f, 0.0f, 0.0f);
+			}
+			
+			glPointSize(10.0f);
+			glBegin(GL_POINTS);
+			float smax = usTable.back().second; // spline length
+			for(float s = 0.0f; s < smax; s += ds) {
+				// Convert from s to (concatenated) u
+				float uu = s2u(s);
+				// Convert from concatenated u to the usual u between 0 and 1.
+				float kfloat;
+				float u = std::modf(uu, &kfloat);
+				// k is the index of the starting control point
+				int k = (int)std::floor(kfloat);
+				// Compute spline point at u
+				glm::mat4 Gk;
+				for(int i = 0; i < 4; ++i) {
+					Gk[i] = glm::vec4(cps[k+i].first, 0.0f);
+				}
+				glm::vec4 uVec(1.0f, u, u*u, u*u*u);
+				glm::vec3 P(Gk * (*B * uVec));
+				glVertex3fv(&P[0]);
+			}
+			glEnd();
+	}
+}
+
+void drawMovingHeli(shared_ptr<MatrixStack> MV, shared_ptr<Program> prog, mat4 &E, vec3 &center2, double t) {
+	if (heliMode == DRAW_HELI) {
+		// INTERPOLATED
+		MV->pushMatrix();
+		
+		MV->multMatrix(E);
+
+		MV->pushMatrix();
+		MV->rotate(-t * prop1Speed, vec3(0.0, 0.4819, 0.0));
+		glUniformMatrix4fv(prog->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
+		MV->popMatrix();
+		heliProp1->draw(prog);
+
+		MV->pushMatrix();
+		MV->translate(center2);
+		MV->rotate(t * prop2Speed, vec3(0.0f, 0.0f, 1.0f));
+		MV->translate(-center2);
+
+		glUniformMatrix4fv(prog->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
+		MV->popMatrix();
+		heliProp2->draw(prog);
+
+
+		glUniformMatrix4fv(prog->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
+		MV->popMatrix();
+
+		heliBody1->draw(prog);
+		heliBody2->draw(prog);
+
+	}
+}
+
 void render()
 {
 	// Update time.
@@ -860,12 +1090,10 @@ void render()
 	float kfloat;
 	float speed = 0.5f;
 
-
 	float smax = usTable.back().second;
 	float tNorm = std::fmod(t, T_MAX) / T_MAX;
 	float sNorm = tNorm;
 	float s_const = smax * sNorm;
-
 
 	float u0_1 = 0.0f;
 
@@ -900,90 +1128,15 @@ void render()
 
 
 	mat4 E;
-	if (quatMode == CALC_QUAT) {
 
-		vec4 g0 = vec4(cps.at(k).second.x, cps.at(k).second.y, cps.at(k).second.z, cps.at(k).second.w);
-		vec4 g1 = vec4(cps.at(k+1).second.x, cps.at(k+1).second.y, cps.at(k+1).second.z, cps.at(k+1).second.w);
-		vec4 g2 = vec4(cps.at(k+2).second.x, cps.at(k+2).second.y, cps.at(k+2).second.z, cps.at(k+2).second.w);
-		vec4 g3 = vec4(cps.at(k+3).second.x, cps.at(k+3).second.y, cps.at(k+3).second.z, cps.at(k+3).second.w);
-		
-		G = mat4(g0, g1, g2, g3);
-		if (keyToggles['d']) {
-			cout << "B4: " << endl;
-			printMat4(G);
-		}
-		
-		for (int i = 0; i < 3; ++i) {
-			float dot_prod = glm::dot(G[i], G[i+1]) ;
-			if (keyToggles['d']) {
-				cout << i << " dot: " << dot_prod << endl;;
-			}
-			if (twirlFix == TWIRL_FIX) {
-				if (dot_prod< 0) {
-					G[i+1] = - G[i+1];
-				}
-			}
-
-		}
-		if (keyToggles['d']) {
-			cout << "AFTER: " << endl;
-			printMat4(G);
-		}
-		vec4 qVec = G*(* B * uVec0);
-		quat q_test(qVec[3], qVec[0], qVec[1], qVec[2]);
-		E = glm::mat4_cast(glm::normalize(q_test)); // Creates a rotation matrix
-		E[3] = glm::vec4(p_i.x, p_i.y, p_i.z, 1.0f); // Puts 'p', which is a vec3 that represents the position, into the last column
-
-	}
-	else if (quatMode == LERP_QUAT) {
-		int prev_idx = k+1;
-		int curr_idx = prev_idx + 1;
-		quat q = (1.0f - u0_1) * cps.at(prev_idx).second + u0_1 * cps.at(curr_idx).second;
-		E = glm::mat4_cast(glm::normalize(q));
-		E[3] = glm::vec4(p_i.x, p_i.y, p_i.z, 1.0f);
-		
-		if (keyToggles[(unsigned)'d']) {
-			printf("//////////////\n");
-			printf("k %d | %6.3f %6.3f %6.3f %6.3f\n", prev_idx, q.x, q.y, q.z);
-			for (int i = 0; i < cps.size(); ++i) {
-				printf("i %d | %6.3f %6.3f %6.3f %6.3f\n", i, cps.at(i).second.x, cps.at(i).second.y, cps.at(i).second.z);
-			}
-		}
-	}
-	else {
-		cerr << "ERROR: bad quat mode" << endl;
-	}
-
+	calculateRotation(E, G, B, uVec0, k, u0_1, p_i);
 	
 	// Apply camera transforms
 	P->pushMatrix();
 	camera->applyProjectionMatrix(P);
 	MV->pushMatrix();
-	if (cameraMode == MOUSE_CAMERA) {
-		camera->applyViewMatrix(MV);
-	}
-	else if (cameraMode == FOLLOW_HELICOPTER_THIRD || cameraMode == FOLLOW_HELICOPTER_FIRST) {
-		vec3 firstPersonOffset(0.0f, 0.1f, 0.0f);
-		vec3 thirdPersonOffset(0.0f, 0.0f, 2.0f);
-		MV->pushMatrix();
 
-		MV->multMatrix(E);
-		if (cameraMode == FOLLOW_HELICOPTER_THIRD) {
-			MV->rotate(90.0f /180.0f * M_PI, vec3(0.0f, 1.0f, 0.0f)); // rotate 90 degrees on y axis to face forward
-			MV->translate(thirdPersonOffset);
-		}
-		else if (cameraMode == FOLLOW_HELICOPTER_FIRST) { 
-			MV->rotate(90.0f /180.0f * M_PI, vec3(0.0f, 1.0f, 0.0f)); // rotate 90 degrees on y axis to face forward
-			MV->translate(firstPersonOffset);
-		}
-
-		mat4 invMat = glm::inverse(MV->topMatrix());
-		MV->popMatrix();
-		MV->multMatrix(invMat);
-	}
-	else {
-		cerr << "Error: undefined camera control mode." << endl;
-	}
+	manipulateCamera(MV, E);
 
 	
 	// Draw origin frame
@@ -995,114 +1148,11 @@ void render()
 		drawGrid();
 	}
 	
-	if (frenetframesMode == DRAW_FRENET) {
-		for (int i = 0; i < cps.size(); ++i) {
-			drawFrenetFrame(cps.at(i).first, MV, P, len);
-		}
+	drawMovingFrenetFrame(MV, P, p_i, p_1, p_2);
 
-		// draw moving frenet frame
-		vec4 cross_p1_p2 = vec4(glm::cross(vec3(p_1), vec3(p_2)), 0.0f);
+	drawSpline(G, B);
 
-		vec4 tangent = p_1 / glm::length(p_1); // T(u) = p'(u) / ||p'(u)||
-		vec4 binorm = cross_p1_p2 / glm::length(cross_p1_p2); // B(u) = p'(u) x p''(u) / ||p'(u) x p''(u)||
-		vec4 normal = vec4(glm::cross(vec3(tangent), vec3(binorm)), 0.0f); // N(u) = T(u) x B(u)
-
-		float magnitudeOfLines = 0.25f;
-		glLineWidth(5.0f);
-
-		// tangent
-		glColor3f(1.0f, 0.0f, 0.0f);
-		glBegin(GL_LINE_STRIP);
-
-		vec4 tan_p0 = p_i + 0.0f * tangent;
-		glVertex3f(tan_p0.x, tan_p0.y, tan_p0.z);
-		vec4 tan_p1 = p_i + magnitudeOfLines * tangent;
-		glVertex3f(tan_p1.x, tan_p1.y, tan_p1.z);
-		glEnd();
-
-		// binorm
-		glColor3f(0.0f, 0.0f, 1.0f);
-		glBegin(GL_LINE_STRIP);
-
-		vec4 binorm_p0 = p_i + 0.0f * binorm;
-		glVertex3f(binorm_p0.x, binorm_p0.y, binorm_p0.z);
-		vec4 binorm_p1 = p_i + magnitudeOfLines * binorm;
-		glVertex3f(binorm_p1.x, binorm_p1.y, binorm_p1.z);
-		glEnd();
-
-		// normal
-		glColor3f(0.0f, 1.0f, 0.0f);
-		glBegin(GL_LINE_STRIP);
-
-		vec4 norm_p0 = p_i + 0.0f * normal;
-		glVertex3f(norm_p0.x, norm_p0.y, norm_p0.z);
-		vec4 norm_p1 = p_i + magnitudeOfLines * normal;
-		glVertex3f(norm_p1.x, norm_p1.y, norm_p1.z);
-		glEnd();
-
-
-		glLineWidth(1);
-	}
-
-	if (drawSplineMode == DRAW_SPLINE) {
-		glColor3f(0.0f, 0.0f, 1.0f);
-		if (cps.size() >= 4) {
-		// drawing curves between points
-			glLineWidth(1.0f);
-			for (int i = 0; i < cps.size()-3; ++i){
-				glBegin(GL_LINE_STRIP);
-				G[0] = glm::vec4(cps[i].first, 0.0f);
-				G[1] = glm::vec4(cps[i+1].first, 0.0f);
-				G[2] = glm::vec4(cps[i+2].first, 0.0f);
-				G[3] = glm::vec4(cps[i+3].first, 0.0f);
-
-				for(float u0 = 0.0f; u0 < 1.0f; u0+=0.01f) {
-					// Fill in uVec
-					glm::vec4 uVec(1.0f, u0, u0*u0, u0*u0*u0);
-					// Compute position at u
-					glm::vec4 p = G*(*B*uVec);
-
-					glVertex3f(p.x, p.y, p.z);
-				}
-				glEnd();
-			}
-		}
-	}
-
-	if((drawEqualPoints == DRAW_EQUAL_POINTS) && !usTable.empty()) {
-			float ds = 0.2;
-			if (arcParamMode == GAUSS_QUAD_MODE) {
-				glColor3f(0.0f, 0.0f, 1.0f);
-			}
-			else {
-				glColor3f(1.0f, 0.0f, 0.0f);
-			}
-			
-			glPointSize(10.0f);
-			glBegin(GL_POINTS);
-			float smax = usTable.back().second; // spline length
-			for(float s = 0.0f; s < smax; s += ds) {
-				// Convert from s to (concatenated) u
-				float uu = s2u(s);
-				// Convert from concatenated u to the usual u between 0 and 1.
-				float kfloat;
-				float u = std::modf(uu, &kfloat);
-				// k is the index of the starting control point
-				int k = (int)std::floor(kfloat);
-				// Compute spline point at u
-				glm::mat4 Gk;
-				for(int i = 0; i < 4; ++i) {
-					Gk[i] = glm::vec4(cps[k+i].first, 0.0f);
-				}
-				glm::vec4 uVec(1.0f, u, u*u, u*u*u);
-				glm::vec3 P(Gk * (*B * uVec));
-				glVertex3fv(&P[0]);
-			}
-			glEnd();
-		}
-
-
-
+	drawPointsOnSpline(B);
 
 	progSimple->unbind();
 	GLSL::checkError(GET_FILE_LINE);
@@ -1157,12 +1207,8 @@ void render()
 		q1 = glm::angleAxis((float)(90.0f/180.0f*M_PI), axis1);
 	}
 
-
 	vec3 center1 = vec3(0.0, 0.4819, 0.0);
 	vec3 center2 = vec3(0.6228f, 0.1179f, 0.1365f);
-	
-
-	// Draw the bunny three times: left, right, and interpolated.
 
 	// draw key frames
 	if (keyframesMode == DRAW_KEYS) {
@@ -1171,35 +1217,8 @@ void render()
 		}
 	}
 	
-	if (heliMode == DRAW_HELI) {
-		// INTERPOLATED
-		MV->pushMatrix();
-		
-		MV->multMatrix(E);
-
-		MV->pushMatrix();
-		MV->rotate(-t * prop1Speed, vec3(0.0, 0.4819, 0.0));
-		glUniformMatrix4fv(prog->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
-		MV->popMatrix();
-		heliProp1->draw(prog);
-
-		MV->pushMatrix();
-		MV->translate(center2);
-		MV->rotate(t * prop2Speed, vec3(0.0f, 0.0f, 1.0f));
-		MV->translate(-center2);
-
-		glUniformMatrix4fv(prog->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
-		MV->popMatrix();
-		heliProp2->draw(prog);
-
-
-		glUniformMatrix4fv(prog->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
-		MV->popMatrix();
-
-		heliBody1->draw(prog);
-		heliBody2->draw(prog);
-
-	}
+	drawMovingHeli(MV, prog, E, center2, t);
+	
 	prog->unbind();
 
 	// Pop stacks

@@ -1,10 +1,11 @@
 Isaac Pitblado
 
-I was able to implement the cel shader. It is available if you click the s key to switch. 
-The rotation goes Phone > Silhouette > Cel. The Cel shader has three different materials
-with different threshholds and colors. 
+Everything should be in working order, I was able to implement all extra credit.
 
-References for cel shader "threshhold" implementation: 
-https://stackoverflow.com/questions/5795829/using-opengl-toon-shader-in-glsl
-http://www.lighthouse3d.com/tutorials/glsl-12-tutorial/toon-shader-version-ii/
+Important Controls:
+movement - w a s d 
+light control - x y X Y 
+free look / fixed look (given) toggle - t 
 
+Unnecessary Extra Controls:
+switch lighting modes - l 

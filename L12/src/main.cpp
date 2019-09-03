@@ -46,6 +46,7 @@ static void key_callback(GLFWwindow *window, int key, int scancode, int action, 
 
 static void char_callback(GLFWwindow *window, unsigned int key)
 {
+
 	keyToggles[key] = !keyToggles[key];
 }
 
@@ -208,6 +209,16 @@ void render()
 		axis1 = glm::normalize(axis1);
 		q1 = glm::angleAxis((float)(90.0f/180.0f*M_PI), axis1);
 	}
+
+	glm::mat4 E0 = glm::mat4_cast(glm::normalize(q0));
+	glm::mat4 E1 = glm::mat4_cast(glm::normalize(q1));
+
+	glm::mat4 R = glm::mat4_cast(glm::normalize((1.0f - alpha)*q0 + alpha*q1));
+
+	// if (keyToggles[(unsigned) 'd']) {
+	// 	std::printf("axis0: %4.2f %4.2f %4.2f axis1: %4.2f %4.2f %4.2f\n", 
+	// 	axis0.x, axis0.y, axis0.z, axis1.x, axis1.y, axis1.z);
+	// }
 	
 	glm::vec3 p0(-1.0f, 0.0f, 0.0f);
 	glm::vec3 p1( 1.0f, 0.0f, 0.0f);
@@ -223,6 +234,7 @@ void render()
 	// LEFT
 	MV->pushMatrix();
 	MV->translate(p0);
+	MV->multMatrix(E0);
 	glUniformMatrix4fv(progNormal->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
 	MV->popMatrix();
 	bunny->draw(progNormal);
@@ -230,6 +242,7 @@ void render()
 	// RIGHT
 	MV->pushMatrix();
 	MV->translate(p1);
+	MV->multMatrix(E1);
 	glUniformMatrix4fv(progNormal->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
 	MV->popMatrix();
 	bunny->draw(progNormal);
@@ -237,6 +250,7 @@ void render()
 	// INTERPOLATED
 	MV->pushMatrix();
 	MV->translate(p_i);
+	MV->multMatrix(R);
 	glUniformMatrix4fv(progNormal->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
 	MV->popMatrix();
 	bunny->draw(progNormal);
@@ -246,6 +260,8 @@ void render()
 	// Pop stacks
 	MV->popMatrix();
 	P->popMatrix();
+
+	// keyToggles[(unsigned)'d'] = false;
 	
 	GLSL::checkError(GET_FILE_LINE);
 }

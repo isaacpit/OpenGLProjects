@@ -72,6 +72,7 @@ INPUT /usr/local/texlive/2018/texmf-dist/fonts/tfm/public/latex-fonts/lasy6.tfm
 OUTPUT /Users/isaacpitblado/Programs/OpenGL/L05/src/eqn/eqn.pdf
 INPUT /usr/local/texlive/2018/texmf-var/fonts/map/pdftex/updmap/pdftex.map
 INPUT /Users/isaacpitblado/Programs/OpenGL/L05/src/eqn/eqn.aux
+INPUT /usr/local/texlive/2018/texmf-dist/fonts/type1/public/amsfonts/cm/cmex10.pfb
 INPUT /usr/local/texlive/2018/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi12.pfb
 INPUT /usr/local/texlive/2018/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi6.pfb
 INPUT /usr/local/texlive/2018/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi8.pfb

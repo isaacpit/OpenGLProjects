@@ -1,0 +1,50 @@
+\title{Assignment 1}
+\author{
+        Isaac Pitblado
+}
+\date{\today}
+
+\documentclass[12pt]{article}
+\usepackage[margin=0.5in]{geometry}
+
+\makeatletter
+\def\@seccntformat#1{%
+  \expandafter\ifx\csname c@#1\endcsname\c@section\else
+  \csname the#1\endcsname\quad
+  \fi}
+\makeatother
+
+\begin{document}
+\maketitle
+
+\section{Introduction}
+\paragraph{Colors}\mbox{} \vspace{1.0em}
+\\
+The colors used for color mode two had RGB values (255, 0, 0) for the top and (0, 0, 255) for the bottom. blah blah blah
+
+\paragraph{Citations}  \mbox{} \vspace{1.0em}
+\\
+Barycentric coordinates
+\\
+https://gamedev.stackexchange.com/questions/23743/ \\
+whats-the-most-efficient-way-to-find-barycentric-coordinates
+
+\paragraph{Note} \mbox{} \vspace{1.0em}
+\\
+GLM
+\\
+I included a relative path from my A1 folder to the glm folder in order to include the glm header file.
+\vspace{.5em}
+\\ 
+Compiler Warnings
+\\
+Also regarding the glm folder, I was unable to silence the warning that came with them. There were 18 warnings
+all associated with glm and all the same warning. The warning read: "anonymous types declared in an anonymous union are an extension [-Wnested-anon-types]".
+\vspace{.5em}
+\\ 
+All header files
+\\
+CMake was being difficult so all of my code is within the respective header files. The only .cpp file used is the main.cpp file.
+
+\end{document}
+This is never printed

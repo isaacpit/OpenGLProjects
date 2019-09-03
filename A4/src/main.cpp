@@ -32,8 +32,8 @@ using glm::vec4;
 struct Coords {
 	int r = 0;
 	int c = 0;
-	int max = 8;
-	int min = - 8;
+	int max = 12;
+	int min = - 12;
 	float** worldSpaceX;
 	float** worldSpaceZ;
 	float** whichShape;
@@ -48,11 +48,6 @@ struct Coords {
 	Coords() {
 		r = (max-min) / spacing + 1;
 		c = r;
-		cout << "max: " << max << endl;
-		cout << "min: " << min << endl;
-		cout << "spacing: " << spacing << endl;
-		cout << "rows: " << r << endl;
-		cout << "cols: " << c << endl;
 		
 		worldSpaceX = new float*[r];
 		worldSpaceZ = new float*[r];
@@ -73,7 +68,6 @@ struct Coords {
 		int k = 0;
 		int l = 0;
 		for (int i = min; i <= max ; i += spacing) {
-			cout << " i j | (xzS) [rgb] [[ks]] \n";
 			for (int j = min; j <= max; j += spacing) {
 				float r = ( rand() % (10000-0) )/ 10000.0;
 				float g = ( rand() % (10000-0) )/ 10000.0;
@@ -85,10 +79,8 @@ struct Coords {
 				float ks_b = ( rand() % (10000-0) )/ 10000.0;
 
 				float scales_x = ( rand() % (1000) + 9000 )/ 10000.0;
-				float scales_y = ( rand() % (1000) + 9000 )/ 10000.0;
+				float scales_y = ( rand() % (100000) + 9000 )/ 10000.0;
 				float scales_z = ( rand() % (1000) + 9000 )/ 10000.0;
-
-
 
 				worldSpaceX[k][l] = j ;
 				worldSpaceZ[k][l] = - i ;
@@ -97,9 +89,8 @@ struct Coords {
 				ks.at(k).at(l) = vec3(ks_r, ks_g, ks_b);
 				scales.at(k).at(l) = vec3(scales_x, scales_y, scales_z);
 				
-				printf("%d %d | (%.2f, %.2f, %.2f) ((%.2f, %.2f, %.2f)) [%.2f, %.2f, %.2f] [[%.2f, %.2f, %.2f]] \n", k, l, worldSpaceX[k][l], worldSpaceZ[k][l], whichShape[k][l], scales[k][l].x, scales[k][l].y, scales[k][l].z, colors[k][l].r, colors[k][l].g, colors[k][l].b,  ks[k][l].r, ks[k][l].g, ks[k][l].b);
 				++l; 
-			} cout << endl;
+			} 
 			l = 0;
 			++k;
 		}
@@ -220,7 +211,6 @@ static void error_callback(int error, const char *description)
 // This function is called when a key is pressed
 static void key_callback(GLFWwindow *window, int key, int scancode, int action, int mods)
 {
-	// printf("key: %d | scancode: %d |  action: %d | mods: %d\n", key, scancode, action, mods);
 
 	InputManager * inputManager = reinterpret_cast<InputManager *>(glfwGetWindowUserPointer(window));
 
@@ -248,8 +238,6 @@ static void key_callback(GLFWwindow *window, int key, int scancode, int action, 
 	if (key == KEY_W_MAIN || key == KEY_A_MAIN || key == KEY_S_MAIN || key == KEY_D_MAIN) {
 		camera->keyPressed(key, mods);
 	}
-
-
 
 	if(key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
 		glfwSetWindowShouldClose(window, GL_TRUE);
@@ -388,8 +376,8 @@ void drawHUD(shared_ptr<MatrixStack> P, shared_ptr<MatrixStack> MV, Light* light
 	float currS = currMat->s;
 
 	glUniform3f(prog->getUniform("ka"), currKa.x, currKa.y, currKa.z);
-	glUniform3f(prog->getUniform("kd"), 1.0f, 1.0f, 0.0f);
-	glUniform3f(prog->getUniform("ks"), 0.5f, 0.5f, 0.5f);
+	glUniform3f(prog->getUniform("kd"), 0.5f, 0.5f, 0.5f);
+	glUniform3f(prog->getUniform("ks"), 1.0f, 1.0f, 1.0f);
 	glUniform1f(prog->getUniform("s"), currS);
 
 
@@ -449,8 +437,6 @@ void drawObjects(shared_ptr<MatrixStack> P, shared_ptr<MatrixStack> MV, Light* l
 // This function is called once to initialize the scene and OpenGL
 static void init(string objFile[], InputManager* im)
 {
-	cout << "objFile0: " << objFile[0] << endl;
-	cout << "objFile1: " << objFile[1] << endl;
 	// Initialize time.
 	glfwSetTime(0.0);
 	
@@ -743,7 +729,7 @@ CelMat* initCelMats() {
 Light* initLights() {
 	Light* lights = new Light();
 
-	vec3 light1_vec = vec3(10.0f, 10.0f, 1.0f);
+	vec3 light1_vec = vec3(10.0f, 10.0f, -10.0f);
 	float light1_intensity = 0.8f;
 	LightNode* light1 = new LightNode(light1_vec, light1_intensity);
 
@@ -772,8 +758,7 @@ int main(int argc, char **argv)
 	// string objFile2 = "";
 	string objFile[2];
 	if (argc < 3) {
-		cout << "Selecting the bunny.obj and cube.obj by default..." << endl;
-		cout << "Enter another .obj file name as third argument to select it instead. " << endl;
+		cout << "Selecting default shapes..." << endl;
 		objFile[0] = "bunny.obj";
 		objFile[1] = "sphere.obj";
 	}

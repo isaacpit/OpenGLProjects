@@ -15,7 +15,7 @@ Camera::Camera() :
 	rfactor(0.01f),
 	tfactor(0.001f),
 	sfactor(0.005f),
-	position(0.0f, 0.0f, 0.0f)
+	position(0.0f, -0.5f, 0.0f)
 {
 }
 
@@ -25,7 +25,6 @@ Camera::~Camera()
 
 void Camera::mouseClicked(float x, float y, bool shift, bool ctrl, bool alt)
 {
-	printf("mouse: (%f, %f)\n", x, y);
 	mousePrev.x = x;
 	mousePrev.y = y;
 	if(shift) {
@@ -61,13 +60,11 @@ void Camera::mouseMoved(float x, float y)
 	}
 	mousePrev = mouseCurr;
 
-	// std::cout << "(" << rotations.x <<  ", " << rotations.y << ")" <<  std::endl;
 }
 
 void Camera::keyPressed(int key, int mods) {
 	// FIXME
 	vec3 F_yaw = normalize(vec3(sin(rotations.x), 0, cos(rotations.x)));
-	// printf("F: (%f, %f, %f)", F_yaw.x, F_yaw.y, F_yaw.z);
 	vec3 R_yaw = normalize(cross(vec3(0, 1, 0), F_yaw));
 
 	if (key == KEY_W_MAIN) {
@@ -86,7 +83,6 @@ void Camera::keyPressed(int key, int mods) {
 	else if (key == KEY_D_MAIN) {
 		position = vec3(position.x - R_yaw.x * STEP_SIZE, position.y + R_yaw.y * STEP_SIZE, position.z + R_yaw.z * STEP_SIZE);
 	}
-	// printf("(%f, %f, %f)\n", position.x, position.y, position.z);
 }
 
 void Camera::applyProjectionMatrix(std::shared_ptr<MatrixStack> P) const

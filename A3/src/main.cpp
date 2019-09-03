@@ -3,6 +3,7 @@
 #define _USE_MATH_DEFINES
 #include <cmath>
 #include <iostream>
+#include <memory>
 
 #define GLEW_STATIC
 #include <GL/glew.h>
@@ -364,15 +365,15 @@ Material* initMaterials() {
 	float nWhite_s = 200.0f;
 	MatNode* nWhite = new MatNode(nWhite_ka, nWhite_kd, nWhite_ks, nWhite_s);
 
-	vec3 nBlue_ka(0.0f, 0.2f, 0.0f);
-	vec3 nBlue_kd(0.05f, 0.1f, 1.0f);
-	vec3 nBlue_ks(1.0f, 0.9f, 0.8f);
-	float nBlue_s = 200.0f;
+	vec3 nBlue_ka(0.0f, 0.0f, 0.0f);
+	vec3 nBlue_kd(0.1f, .15f, 1.0f);
+	vec3 nBlue_ks(0.5f, .9f, 0.5f);
+	float nBlue_s = 100.0f;
 	MatNode* nBlue = new MatNode(nBlue_ka, nBlue_kd, nBlue_ks, nBlue_s);
 
-	vec3 nGray_ka(0.1f, 0.1f, 0.f);
-	vec3 nGray_kd(0.3f, 0.3f, 0.5f);
-	vec3 nGray_ks(0.1f, 0.1f, 0.25f);
+	vec3 nGray_ka(0.0f, 0.0f, 0.0f);
+	vec3 nGray_kd(0.5f, 0.5f, 0.5f);
+	vec3 nGray_ks(0.15f, 0.15f, 0.15f);
 	float nGray_s = 25.0f;
 	MatNode* nGray = new MatNode(nGray_ka, nGray_kd, nGray_ks, nGray_s);
 
@@ -395,7 +396,7 @@ CelMat* initCelMats() {
 	vec4 c1_2(0.6f, 0.3f, 0.3f, 1.0f);
 	vec4 c1_3(0.4f, 0.2f, 0.2f, 1.0f);
 	vec4 c1_4(0.2f, 0.1f, 0.1f, 1.0f);
-	vec3 t1_1(0.95f, 0.60f, 0.25f);
+	vec3 t1_1(0.95f, 0.70f, 0.45f);
 
 	CelMatNode* node1 = new CelMatNode(c1_1, c1_2, c1_3, c1_4, t1_1);
 
@@ -403,14 +404,14 @@ CelMat* initCelMats() {
 	vec4 c2_2(f2 / 2.0f, f2, f2 / 2.0f, 1.0f);
 	vec4 c2_3(f3 / 2.0f, f3, f3 / 2.0f, 1.0f);
 	vec4 c2_4(f4 / 2.0f, f4, f4 / 2.0f, 1.0f);
-	vec3 t2_1(0.85f, 0.50f, 0.20f);
+	vec3 t2_1(0.85f, 0.5f, 0.20f);
 	CelMatNode* node2 = new CelMatNode(c2_1, c2_2, c2_3, c2_4, t2_1);
 
 	vec4 c3_1(f1 / 2.0f, f1 / 2.0f, f1, 1.0f);
 	vec4 c3_2(f2 / 2.0f, f2 / 2.0f, f2, 1.0f);
 	vec4 c3_3(f3 / 2.0f, f3 / 2.0f, f3, 1.0f);
 	vec4 c3_4(f4 / 2.0f, f4 / 2.0f, f4, 1.0f);
-	vec3 t3_1(0.7f, 0.25f, 0.15f);
+	vec3 t3_1(0.7f, 0.55f, 0.2f);
 	CelMatNode* node3 = new CelMatNode(c3_1, c3_2, c3_3, c3_4, t3_1);
 
 	c->addNode(node1);
@@ -448,7 +449,8 @@ int main(int argc, char **argv)
 
 	string objFile = "";
 	if (argc < 3) {
-		cout << "Selecting the bunny.obj by default" << endl;
+		cout << "Selecting the bunny.obj by default..." << endl;
+		cout << "Enter another .obj file name as third argument to select it instead. " << endl;
 		objFile = "bunny.obj";
 	}
 	else {

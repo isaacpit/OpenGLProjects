@@ -14,4 +14,7 @@
 \begin{document} 
 \begin{eqnarray} x_w &= s_x x_i + t_x,\\ y_w &= s_y y_i + t_y. \end{eqnarray}
 \begin{eqnarray} s_x &= \frac{\Delta x_w}{width},\\ s_y &= \frac{\Delta y_w}{height},\\ t_x &= \text{min}(x_w),\\ t_y &= \text{min}(y_w). \end{eqnarray}
+\begin{eqnarray} c_D = k_D \, \max \big( 0, \text{dot}(\hat{l}, \hat{n}) \big), \end{eqnarray} 
+\begin{eqnarray} c_S = k_S \, \text{pow} \Big( \max \big( 0, \text{dot}(\hat{h}, \hat{n}) \big), s \Big) \end{eqnarray}
+
 \end{document}
